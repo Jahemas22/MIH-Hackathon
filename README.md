@@ -1,6 +1,6 @@
-# Tideline
+# SDBeachFinder
 
-Tideline ranks San Diego beaches for a swim. Drop a pin, pick a day and time, and it ranks every beach nearby by water quality, swim safety, water comfort, crowds, weather and drive time.
+SDBeachFinder ranks San Diego beaches for a swim. Drop a pin, pick a day and time, and it ranks every beach nearby by water quality, swim safety, water comfort, crowds, weather and drive time.
 
 **Live site:** `https://jahemas22.github.io/MIH-Hackathon/` (after GitHub Pages is turned on)
 
