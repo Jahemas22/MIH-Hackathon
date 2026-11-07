@@ -274,6 +274,7 @@ input[type=range]:focus-visible{outline:3px solid var(--accent);outline-offset:4
 .ls{padding:3px 10px;border-radius:99px;background:var(--surface);box-shadow:var(--shadow)}
 .ls::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--line);vertical-align:1px}
 .ls.live{color:var(--good)} .ls.live::before{background:var(--good);box-shadow:0 0 0 3px var(--good-bg)}
+.ls.hand{color:var(--accent)} .ls.hand::before{background:var(--accent)}
 .ls.loading::before{background:var(--sun)} .ls.demo::before{background:var(--muted);opacity:.5}
 .lv{font-family:var(--body);font-size:10px;font-weight:800;color:var(--good);background:var(--good-bg);padding:1px 6px;border-radius:99px;vertical-align:2px;text-transform:uppercase;letter-spacing:.05em}
 </style>
@@ -332,10 +333,44 @@ input[type=range]:focus-visible{outline:3px solid var(--accent);outline-offset:4
 </main>
 <article class="bp" id="beachpage" hidden></article>
 
-  <p class="demo"><b>Demo data</b><span>Official sources: lifeguard conditions from <a href="https://safebeachday.com/" target="_blank" rel="noopener">Safe Beach Day</a> and water quality from the <a href="https://www.sdbeachinfo.com/" target="_blank" rel="noopener">County of San Diego</a>. Weather is live from the National Weather Service, and tides and water temperature are live from NOAA. Water quality, waves, rip risk and bus fullness are realistic examples until live sources are added. Crowds come from a historical model of each beach's attendance by month, day, hour, weather and events.</span></p>
+  <p class="demo"><b>Demo data</b><span>Official sources: lifeguard conditions from <a href="https://safebeachday.com/" target="_blank" rel="noopener">Safe Beach Day</a> and water quality from the <a href="https://www.sdbeachinfo.com/" target="_blank" rel="noopener">County of San Diego</a>. Weather is live from the National Weather Service, and tides and water temperature are live from NOAA. Water quality is checked by hand from the County site (last checked <span id="wqdate"></span>). Waves, rip risk and bus fullness are realistic examples until live sources are added. Crowds come from a historical model of each beach's attendance by month, day, hour, weather and events.</span></p>
 </div>
 
 <script>
+// =====================================================================
+//  WATER QUALITY: UPDATE BY HAND each day from the County site:
+//  https://www.sdbeachinfo.com
+//  Use one of: "good" (open / clean), "advisory", "closed", "untested"
+// =====================================================================
+const WATER_QUALITY_CHECKED = "Nov 7, 2026";
+const WATER_QUALITY = {
+  "Oceanside City Beach"        : "good",
+  "Buccaneer Beach"             : "good",
+  "Carlsbad State Beach"        : "good",
+  "Tamarack Beach"              : "advisory",
+  "South Carlsbad State Beach"  : "good",
+  "Moonlight Beach"             : "good",
+  "Swami's"                     : "good",
+  "Cardiff State Beach"         : "advisory",
+  "Fletcher Cove, Solana Beach" : "good",
+  "Del Mar City Beach"          : "good",
+  "Torrey Pines State Beach"    : "good",
+  "Black's Beach"               : "good",
+  "La Jolla Shores"             : "good",
+  "La Jolla Cove"               : "advisory",
+  "Windansea Beach"             : "good",
+  "Pacific Beach"               : "good",
+  "Bonita Cove, Mission Bay"    : "good",
+  "Mission Beach"               : "good",
+  "Ocean Beach"                 : "advisory",
+  "Coronado Central Beach"      : "advisory",
+  "Silver Strand State Beach"   : "closed",
+  "Imperial Beach"              : "closed",
+  "Border Field State Park"     : "closed",
+};
+// Rain in the last 72 hours (inches) and hours since it stopped. 0 if no rain.
+const RAIN = { in72h: 0, hoursSince: 72 };
+// =====================================================================
 // ---------- DATA LAYER (replace these with real API calls later) ----------
 const PLACES = [
   ["Downtown San Diego",32.7157,-117.1611],["Pacific Beach",32.7980,-117.2400],["Point Loma",32.7300,-117.2300],
@@ -370,6 +405,8 @@ const BEACHES = [
   {name:"Imperial Beach",lat:32.5790,lng:-117.1340,pop:2,quality:"closed",rip:"moderate",surf:3,tide:"Rising, high 4.6 ft at 3:36 pm",waterF:66,airF:76,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 933",50],["MTS 934",38]]},
   {name:"Border Field State Park",lat:32.5370,lng:-117.1230,pop:1,quality:"closed",rip:"high",surf:4,tide:"Rising, high 4.6 ft at 3:38 pm",waterF:66,airF:76,sky:"sunny",event:null,lifeguard:false,buses:[]}
 ];
+
+BEACHES.forEach(b=>{if(WATER_QUALITY[b.name])b.quality=WATER_QUALITY[b.name];});
 
 // ---------- HISTORICAL CROWD MODEL ----------
 // Peak = typical people on the sand on a summer Sunday ~1-2 pm (baseline estimates; replace with
@@ -470,7 +507,7 @@ function applyLive(b,date){
 }
 function liveBadge(){
   const s=LIVE.status, item=(k,l)=>`<span class="ls ${s[k]}">${l}${s[k]==="live"?"":s[k]==="loading"?" (loading…)":" (demo)"}</span>`;
-  $("livebar").innerHTML=`${item("weather","Weather")}${item("tides","Tides")}${item("water","Water temp")}<span class="ls demo">Water quality, waves, rip risk, buses (demo)</span>`;
+  $("livebar").innerHTML=`${item("weather","Weather")}${item("tides","Tides")}${item("water","Water temp")}<span class="ls hand">Water quality (checked ${WATER_QUALITY_CHECKED})</span><span class="ls demo">Waves, rip risk, buses (demo)</span>`;
 }
 async function loadLive(){
   liveBadge();
@@ -480,7 +517,6 @@ async function loadLive(){
 
 // ---------- TIDELINE SCORE: Score = 100 x G (water quality) x Q (conditions) ----------
 // Demo inputs for things we don't have live feeds for yet.
-const RAIN={in72h:0,hoursSince:72};            // inches of rain in the last 72 h, hours since it stopped
 const TIJUANA={L:0.7,S:0.4};                    // river pollution level 0-1, share of swell from S-SW 0-1
 const EXPOSURE={"Coronado Central Beach":1,"Silver Strand State Beach":1,"Imperial Beach":2,"Border Field State Park":2};
 const PERIOD={"Bonita Cove, Mission Bay":0};    // wave period in seconds (default 12 s on the open coast)
@@ -584,7 +620,7 @@ $("hour").value=String(clamp(NOW.getHours(),7,19));
 function when(hour){const d=new Date(NOW);d.setDate(d.getDate()+ +$("day").value);d.setHours(hour??+$("hour").value,0,0,0);return d;}
 let open=null;
 function origin(){ return {name:"your pin near "+nearestTown(),lat:pin.lat,lng:pin.lng}; }
-const qChip=q=>q==="good"?'<span class="chip g">Water clean</span>':q==="advisory"?'<span class="chip w">Water advisory</span>':'<span class="chip b">Closed: contamination</span>';
+const qChip=q=>q==="good"?'<span class="chip g">Water clean</span>':q==="untested"?'<span class="chip">Water not tested</span>':q==="advisory"?'<span class="chip w">Water advisory</span>':'<span class="chip b">Closed: contamination</span>';
 const ripChip=r=>`<span class="chip ${r==="low"?"g":r==="moderate"?"w":"b"}">Rip risk ${r}</span>`;
 const crowdChip=(c,r)=>`<span class="chip ${c==="Quiet"?"g":c==="Moderate"?"":"w"}">${c} · ${pct(r)}% busy</span>`;
 const fullTxt=p=>p>=90?["Full","b"]:p>=70?["Filling up","w"]:["Seats open","g"];
@@ -898,7 +934,7 @@ function renderBeach(name){
       <div class="btns"><a href="${SBD[b.name]||"https://safebeachday.com/"}" target="_blank" rel="noopener">Lifeguard report on Safe Beach Day</a><a class="alt" href="https://www.sdbeachinfo.com/" target="_blank" rel="noopener">County water quality</a></div>
     </section>
     <section class="tiles" aria-label="Conditions">
-      <div class="tile" style="--tc:${b.quality==="good"?"var(--good)":b.quality==="advisory"?"var(--sun)":"var(--bad)"}"><h3>Water quality</h3><div class="big">${b.quality==="good"?"Clean":b.quality==="advisory"?"Advisory":"Closed"}</div><p>${b.quality==="good"?"Meets state bacteria standards.":b.quality==="advisory"?"Above state bacteria standards.":"Sewage contamination."}</p></div>
+      <div class="tile" style="--tc:${b.quality==="good"?"var(--good)":b.quality==="advisory"||b.quality==="untested"?"var(--sun)":"var(--bad)"}"><h3>Water quality</h3><div class="big">${b.quality==="good"?"Clean":b.quality==="advisory"?"Advisory":b.quality==="untested"?"Not tested":"Closed"}</div><p>${b.quality==="good"?"Meets state bacteria standards.":b.quality==="advisory"?"Above state bacteria standards.":b.quality==="untested"?"No recent County sample.":"Sewage contamination."} Checked ${WATER_QUALITY_CHECKED}.</p></div>
       <div class="tile" style="--tc:${b.rip==="low"?"var(--good)":b.rip==="moderate"?"var(--sun)":"var(--bad)"}"><h3>Swim safety</h3><div class="big">Rip risk ${b.rip}</div><p>${b.surf?b.surf+" ft waves":"Calm bay water"} · ${b.lifeguard?"Lifeguards on duty":"No lifeguard"}</p></div>
       <div class="tile"><h3>Tide ${b.tideLive?'<span class="lv">Live</span>':""}</h3><div class="big">${b.tide.split(",")[0]}</div><p>${b.tide.split(",").slice(1).join(",").trim()}${b.tideLive?` · NOAA ${TIDE_STATIONS[tideStation(b)]}`:""}</p></div>
       <div class="tile" style="--tc:${b.waterF>=66?"var(--good)":b.waterF>=62?"var(--sea)":"var(--accent)"}"><h3>Water temperature ${b.waterLive?'<span class="lv">Live</span>':""}</h3><div class="big">${b.waterF}°F</div><p>${waterFeel(b.waterF)}${b.waterLive?` Measured at ${b.waterLive}.`:""}</p></div>
@@ -973,6 +1009,7 @@ render();
 route();
 loadPhotos();
 loadLive();
+try{$("wqdate").textContent=WATER_QUALITY_CHECKED;}catch(e){}
 </script>
 
 </body>
