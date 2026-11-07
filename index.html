@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tideline</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: sky-to-sand hero with a wave edge, then a trip-options card, the coast map, and a stack of beach cards. Single light beach look by design. */
+:root{
+  color-scheme:light;
+  --bg:#FFF8EC; --sand:#FCEBCB; --sky:#DDF2FA; --surface:#FFFFFF; --ink:#1E3A4C; --muted:#5F7684; --line:#F1E3C8;
+  --accent:#1B8FA6; --accent-soft:#DDF3F6; --coral:#FF7A66; --sun:#FFC94D;
+  --good:#2E9E6E; --good-bg:#DDF5EA; --warn:#B47A00; --warn-bg:#FFF0C7; --bad:#E0503D; --bad-bg:#FFE4DF;
+  --sea:#A9DDEA; --land:#FBE6BF; --coast:#FFFFFF;
+  --display:"Fredoka","Nunito",ui-rounded,system-ui,sans-serif;
+  --body:"Nunito",ui-rounded,system-ui,sans-serif;
+  --mono:"Nunito",ui-rounded,system-ui,sans-serif;
+  --shadow:0 1px 2px rgba(30,58,76,.06),0 6px 18px rgba(30,58,76,.07);
+}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.hero{background:linear-gradient(180deg,var(--sky) 0%,#EAF7F9 60%,var(--bg) 100%);position:relative;overflow:hidden}
+.hero-in{max-width:1280px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:34px 56px;position:relative}
+.sun{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:22px;width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#FFE08A,var(--sun));box-shadow:0 0 0 12px rgba(255,201,77,.18),0 0 0 26px rgba(255,201,77,.09)}
+.wave{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:34px;display:block}
+.eyebrow{display:inline-block;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--surface);padding:4px 10px;border-radius:99px;box-shadow:var(--shadow)}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(34px,6vw,58px);line-height:1;margin:14px 0 0;letter-spacing:-.01em;text-wrap:balance;max-width:16ch;color:var(--ink)}
+h1 em{font-style:normal;color:var(--accent)}
+.sub{color:var(--muted);margin:10px 0 0;max-width:56ch;font-size:17px}
+.wrap{max-width:1280px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:4px 48px;display:flex;flex-direction:column;gap:18px}
+.demo{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:flex-start}
+.demo b{color:var(--warn);background:var(--warn-bg);padding:1px 8px;border-radius:99px;white-space:nowrap;font-weight:800}
+.panel{background:var(--surface);border-radius:22px;padding:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;box-shadow:var(--shadow)}
+@media (max-width:560px){.panel{grid-template-columns:1fr 1fr}.panel label:first-child{grid-column:1/-1}}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:700}
+select{font:inherit;font-weight:700;font-size:15px;color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:14px;padding:10px 12px;width:100%;box-sizing:border-box;cursor:pointer}
+select:hover{border-color:var(--sea)}
+select:focus-visible,.card:focus-visible,.spark .col:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.full{grid-column:1/-1}
+.weights{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:2px dashed var(--line);padding-top:12px}
+.weights b{color:var(--ink)}
+.pill{font-size:12px;font-weight:700;background:var(--accent-soft);color:var(--accent);padding:3px 10px;border-radius:99px}
+.pill.q{background:var(--bad-bg);color:var(--bad)}
+.meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.meta h2{font-family:var(--display);font-weight:600;font-size:22px;margin:0}
+.meta span{font-size:13px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:12px;list-style:none;margin:0;padding:0}
+.card{background:var(--surface);border-radius:22px;padding:16px;display:grid;grid-template-columns:72px 1fr;gap:16px;align-items:start;cursor:pointer;box-shadow:var(--shadow);position:relative;border:2px solid transparent}
+.card:hover{border-color:var(--accent-soft)}
+.card.top{border-color:var(--sun);background:linear-gradient(180deg,#FFFBF0,var(--surface) 60%)}
+.card.closed{background:var(--bad-bg);border-color:#FFC8BF}
+.rank{position:absolute;top:-8px;left:-6px;min-width:26px;height:26px;padding:0 6px;box-sizing:border-box;border-radius:99px;background:var(--ink);color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.card.top .rank{background:var(--sun);color:var(--ink)}
+.dial{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--sand) 0);position:relative}
+.dial::before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--surface)}
+.card.closed .dial::before{background:var(--bad-bg)}
+.dial span{position:relative;font-family:var(--display);font-weight:700;font-size:24px;line-height:1;font-variant-numeric:tabular-nums;text-align:center}
+.dial small{display:block;font-family:var(--body);font-size:10px;font-weight:700;color:var(--muted);margin-top:2px}
+.info{min-width:0;display:flex;flex-direction:column;gap:8px}
+.titlerow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.name{font-family:var(--display);font-weight:600;font-size:21px;line-height:1.15;margin:0}
+.verdict{font-size:12px;font-weight:800;padding:2px 9px;border-radius:99px;color:var(--vc);background:var(--vb)}
+.dist{font-size:13.5px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:700;padding:4px 10px;border-radius:99px;background:var(--bg);color:var(--ink);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--sea)}
+.chip.g{background:var(--good-bg);color:var(--good)} .chip.g::before{background:var(--good)}
+.chip.w{background:var(--warn-bg);color:var(--warn)} .chip.w::before{background:var(--sun)}
+.chip.b{background:var(--surface);color:var(--bad)} .chip.b::before{background:var(--bad)}
+.alert{font-size:13.5px;color:var(--bad);font-weight:800}
+.detail{grid-column:1/-1;background:var(--bg);border-radius:16px;padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px 22px;font-size:14px}
+.card.closed .detail{background:var(--surface)}
+@media (max-width:480px){.card{grid-template-columns:60px 1fr;gap:12px}.dial{width:60px;height:60px}.dial span{font-size:20px}}
+.detail h4{margin:0 0 6px;font-family:var(--display);font-weight:600;font-size:15px;color:var(--ink)}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar{display:grid;grid-template-columns:128px 1fr 44px;gap:8px;align-items:center;font-size:13px;font-weight:600}
+.bar i{height:8px;border-radius:99px;background:var(--sand);position:relative;overflow:hidden}
+.bar i::after{content:"";position:absolute;inset:0;width:calc(var(--v)*1%);background:var(--bc,var(--accent));border-radius:99px}
+.legend{display:flex;gap:14px;font-size:12px;font-weight:700;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--lc);margin-right:5px;vertical-align:-1px}
+.bar em{font-style:normal;font-size:12px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.bus{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;font-weight:700;padding:3px 0}
+a.dir{display:inline-block;margin-top:10px;background:var(--accent);color:#fff;font-weight:800;text-decoration:none;padding:8px 14px;border-radius:99px;font-size:14px}
+a.dir:hover{background:#157A8E}
+.hourly{grid-column:1/-1}
+.hourly h4{margin-bottom:40px}
+.spark{display:grid;grid-template-columns:repeat(11,1fr);gap:5px;height:76px;align-items:end}
+.spark .col{display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;position:relative;cursor:default}
+.spark i{width:100%;background:#CBEAF1;border-radius:8px 8px 3px 3px}
+.spark .on i{background:var(--accent)}
+.spark .tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-weight:700;font-size:12px;line-height:1.35;padding:6px 10px;border-radius:10px;white-space:nowrap;text-align:center;pointer-events:none;opacity:0;z-index:5}
+.spark .col:first-child .tip{left:0;transform:none}
+.spark .col:last-child .tip{left:auto;right:0;transform:none}
+.spark .col:hover .tip,.spark .col:focus .tip{opacity:1}
+.spark .col:hover i,.spark .col:focus i{background:var(--coral)}
+.spark span{font-size:11px;font-weight:700;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+.note b{color:var(--good)}
+.mapbox{position:relative;border-radius:22px;overflow:hidden;background:var(--sea);box-shadow:var(--shadow);border:4px solid var(--surface)}
+#map{display:block;width:100%;height:clamp(420px,66vh,600px)}
+.lpin{width:18px;height:18px;border-radius:50%;background:var(--coral);border:3px solid #fff;box-shadow:0 0 0 8px rgba(255,122,102,.25),0 2px 6px rgba(0,0,0,.25)}
+.leaflet-container{font-family:var(--body)}
+.locate{position:absolute;z-index:1000;top:12px;right:12px;font:inherit;font-weight:800;font-size:14px;background:var(--surface);color:var(--accent);border:0;border-radius:99px;padding:8px 14px;box-shadow:var(--shadow);cursor:pointer}
+.locate:hover{background:var(--accent-soft)}
+.locate:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.maphint{position:absolute;z-index:1000;left:10px;right:10px;bottom:12px;margin:0 auto;width:fit-content;max-width:calc(100% - 20px);background:var(--surface);font-size:13px;font-weight:700;padding:7px 14px;border-radius:99px;text-align:center;box-shadow:var(--shadow)}
+.maphint::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--coral);margin-right:7px;vertical-align:1px}
+.empty{text-align:center;color:var(--muted);padding:30px 10px;background:var(--surface);border:2px dashed var(--line);border-radius:22px;font-weight:600}
+@media (prefers-reduced-motion:no-preference){.card{transition:transform .15s,border-color .15s}.card:hover{transform:translateY(-2px)}.spark i{transition:background .12s}}
+
+[hidden]{display:none!important}
+.home{display:flex;flex-direction:column;gap:18px}
+.side,.results{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media (min-width:760px){
+  .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;align-items:stretch}
+  #map{height:clamp(420px,62vh,680px)}
+}
+@media (min-width:980px){
+  .panel{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
+  .panel .weights{grid-column:auto;border-top:0;padding-top:0;border-left:2px dashed var(--line);padding-left:16px;align-self:center}
+}
+.card .go{grid-column:1/-1;display:flex;justify-content:flex-end;font-size:13px;font-weight:800;color:var(--accent);margin-top:-6px;align-self:end}
+/* ---- beach detail page ---- */
+.bp{display:flex;flex-direction:column;gap:20px}
+.back{align-self:flex-start;font:inherit;font-weight:800;font-size:15px;color:var(--accent);background:var(--surface);border:0;border-radius:99px;padding:9px 16px;box-shadow:var(--shadow);cursor:pointer}
+.back:hover{background:var(--accent-soft)}
+.back:focus-visible,.bp a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.bp-head{background:var(--surface);border-radius:26px;box-shadow:var(--shadow);padding:24px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center}
+.bp-head.top{border:2px solid var(--sun);background:linear-gradient(180deg,#FFFBF0,var(--surface) 70%)}
+.bp-head.closed{background:var(--bad-bg)}
+.bp-head h2{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1.02;margin:6px 0 8px;text-wrap:balance}
+.bp-sub{color:var(--muted);font-size:15px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.bp-sub b{color:var(--ink)}
+.bigdial{width:128px;height:128px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--sand) 0);position:relative}
+.bigdial::before{content:"";position:absolute;inset:11px;border-radius:50%;background:var(--surface)}
+.bp-head.closed .bigdial::before{background:var(--bad-bg)}
+.bigdial span{position:relative;font-family:var(--display);font-weight:700;font-size:44px;line-height:1;text-align:center}
+.bigdial small{display:block;font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted);margin-top:4px}
+@media (max-width:560px){.bp-head{grid-template-columns:1fr}.bigdial{width:104px;height:104px}.bigdial span{font-size:36px}}
+.banner{border-radius:18px;padding:14px 18px;font-weight:700;display:flex;flex-direction:column;gap:2px}
+.banner.b{background:var(--bad-bg);color:var(--bad)} .banner.w{background:var(--warn-bg);color:var(--warn)}
+.banner span{font-weight:600;color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px}
+.tile{background:var(--surface);border-radius:20px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;border-top:5px solid var(--tc,var(--sea))}
+.tile h3{margin:0;font-size:13px;font-weight:800;color:var(--muted)}
+.tile .big{font-family:var(--display);font-weight:700;font-size:26px;line-height:1.1}
+.tile p{margin:0;font-size:14px;color:var(--muted)}
+.bp-grid{display:grid;grid-template-columns:1fr;gap:16px}
+@media (min-width:900px){.bp-grid{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}}
+.box{background:var(--surface);border-radius:22px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0}
+.box h3{margin:0;font-family:var(--display);font-weight:600;font-size:20px}
+.box .detail{background:transparent;padding:0}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:end;height:110px}
+.week div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;font-size:12px;font-weight:700;color:var(--muted)}
+.week i{width:100%;border-radius:8px 8px 3px 3px;background:#CBEAF1}
+.week .on i{background:var(--accent)}
+.week em{font-style:normal;color:var(--ink);font-size:12px}
+#bpmap{height:280px;border-radius:16px;overflow:hidden}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btns a{background:var(--accent);color:#fff;font-weight:800;text-decoration:none;padding:9px 16px;border-radius:99px;font-size:14px}
+.btns a.alt{background:var(--accent-soft);color:var(--accent)}
+.busrow{display:grid;grid-template-columns:70px 1fr auto;gap:10px;align-items:center;font-weight:700;font-size:14px}
+.busrow i{height:10px;border-radius:99px;background:var(--sand);position:relative;overflow:hidden}
+.busrow i::after{content:"";position:absolute;inset:0;width:calc(var(--v)*1%);background:var(--bc);border-radius:99px}
+.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:15px}
+.alts{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.alts a{background:var(--surface);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);text-decoration:none;color:var(--ink);display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:700;border:2px solid transparent}
+.alts a:hover{border-color:var(--accent-soft)}
+.alts b{font-family:var(--display);font-size:22px;color:var(--accent)}
+
+/* photo cards */
+.card{display:flex;flex-direction:column;align-items:stretch;padding:0;overflow:hidden;gap:0}
+.ph .dial span{color:var(--ink)}
+.ph{--fallback:linear-gradient(180deg,#BFE6F2 0%,#DDF2FA 42%,#6CC7DA 42%,#3FA9C2 66%,#F7E2B5 66%,#F2D49C 100%);
+  position:relative;min-height:170px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:16px;color:#fff;
+  background:linear-gradient(180deg,rgba(12,36,48,.05) 30%,rgba(12,36,48,.72) 100%),var(--img,var(--fallback)) center/cover no-repeat}
+.card.closed .ph{background:linear-gradient(180deg,rgba(120,20,10,.15) 20%,rgba(90,20,15,.8) 100%),var(--img,var(--fallback)) center/cover no-repeat}
+.ph .rank{position:absolute;top:12px;left:12px}
+.ph .credit{position:absolute;top:12px;right:12px;font-size:10.5px;font-weight:700;color:rgba(255,255,255,.9);background:rgba(12,36,48,.4);padding:2px 8px;border-radius:99px;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-text{min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.ph .name{color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.35);font-size:23px}
+.ph .dist{color:rgba(255,255,255,.92);font-weight:600}
+.ph .dial{flex:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.cb{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
+.cb .go{margin-top:auto;display:flex;justify-content:flex-end;font-size:13px;font-weight:800;color:var(--accent)}
+.card.top{background:var(--surface)}
+.card.top .ph{box-shadow:inset 0 0 0 0 transparent}
+.bp-head.photo{background:linear-gradient(90deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.88) 45%,rgba(255,255,255,.1) 100%),var(--img) center/cover no-repeat;min-height:220px}
+.bp-head .credit{font-size:11px;color:var(--muted);margin-top:8px}
+
+label output{float:right;color:var(--accent);font-weight:800;font-size:15px}
+label[for="radius"]{display:block}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:99px;margin:14px 0 6px;cursor:pointer;
+  background:linear-gradient(90deg,var(--accent) var(--fill,20%),var(--sand) var(--fill,20%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--sun);border:4px solid #fff;box-shadow:0 2px 6px rgba(30,58,76,.3)}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--sun);border:4px solid #fff;box-shadow:0 2px 6px rgba(30,58,76,.3)}
+input[type=range]:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.ticks{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted)}
+.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:15px}
+.steps li::marker{font-weight:800;color:var(--accent)}
+.lb{display:inline-block;font-size:12px;font-weight:800;color:#fff;background:var(--lc);padding:1px 8px;border-radius:99px;white-space:nowrap}
+
+.box h3+.tags{margin-bottom:6px}
+.tags{display:flex;flex-wrap:wrap;gap:8px}
+.tag{font-size:13.5px;font-weight:700;padding:5px 12px;border-radius:99px}
+.tag.am{background:var(--accent-soft);color:var(--accent)}
+.tag.ok{background:var(--good-bg);color:var(--good)}
+.tag.no{background:var(--bad-bg);color:var(--bad)}
+.tag.no::before{content:"✕ ";font-weight:800}
+.haz{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.haz li{background:var(--warn-bg);color:#7A5300;border-radius:12px;padding:8px 12px;font-weight:700;font-size:14px}
+.haz li::before{content:"!";display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--sun);color:var(--ink);font-weight:800;font-size:12px;margin-right:8px}
+.food{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.food a{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg);color:var(--ink);text-decoration:none}
+.food a:hover{background:var(--accent-soft)}
+.food b{display:block;font-size:15px}
+.food small{color:var(--muted);font-size:12.5px;text-transform:capitalize}
+.food em{font-style:normal;font-weight:800;color:var(--accent);font-size:13px;white-space:nowrap}
+#food .note a{color:var(--accent);font-weight:700}
+
+.box.wide{grid-column:1/-1}
+.info{gap:22px}
+.ig h3{margin-bottom:12px}
+.igrid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px 18px}
+.ic{display:flex;align-items:center;gap:12px;font-size:15.5px;font-weight:700}
+.ib{flex:none;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;position:relative}
+.ib svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic.am .ib{background:var(--accent-soft);color:var(--accent)}
+.ic.ok .ib{background:var(--good-bg);color:var(--good);border-radius:50%}
+.ic.no .ib{background:var(--bad-bg);color:var(--ink);border-radius:50%;box-shadow:inset 0 0 0 3px var(--bad)}
+.ic.no .ib::after{content:"";position:absolute;left:50%;top:50%;width:3px;height:40px;background:var(--bad);border-radius:2px;transform:translate(-50%,-50%) rotate(45deg)}
+.ic.no .ib svg{width:20px;height:20px}
+.ic.hz .ib{color:var(--ink);background:none}
+.ic.hz .ib::before{content:"";position:absolute;inset:2px 0 0;background:var(--sun);clip-path:polygon(50% 0,100% 92%,0 92%);border-radius:4px}
+.ic.hz .ib svg{position:relative;width:18px;height:18px;margin-top:10px}
+#bpmap{height:300px}
+
+.live{background:linear-gradient(90deg,var(--sky),var(--surface));border-radius:20px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+.live>div:first-child{display:flex;flex-direction:column;gap:2px;max-width:60ch}
+.live b{font-family:var(--display);font-weight:600;font-size:18px}
+.live span{color:var(--muted);font-size:14px}
+
+.extra{border-top:2px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.extra h4{margin:0;font-family:var(--display);font-weight:600;font-size:16px}
+.besttime{margin:0;font-size:14.5px;background:var(--good-bg);color:#1E6B4A;padding:10px 12px;border-radius:12px}
+.cmp{display:flex;flex-direction:column;gap:6px}
+.cmp a{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,2fr) 32px;gap:10px;align-items:center;font-size:13.5px;font-weight:700;color:var(--ink);text-decoration:none;padding:4px 6px;border-radius:10px}
+.cmp a:hover{background:var(--bg)}
+.cmp a.me{background:var(--accent-soft)}
+.cmp span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmp i{height:8px;border-radius:99px;background:var(--sand);position:relative;overflow:hidden}
+.cmp i::after{content:"";position:absolute;inset:0;width:calc(var(--v)*1%);background:var(--bc);border-radius:99px}
+.cmp em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
+
+.bar small{color:var(--muted);font-weight:700;font-size:11px}
+.bar.gate{border-top:2px dashed var(--line);padding-top:6px;margin-top:2px}
+#prio{display:block}
+#prio summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-weight:700;color:var(--ink);list-style:none}
+#prio summary::-webkit-details-marker{display:none}
+#prio .hint{margin-left:auto;color:var(--accent);font-weight:800}
+#prio .hint::after{content:" ▾"}
+#prio[open] .hint::after{content:" ▴"}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 18px;margin-top:12px;align-items:end}
+.wgrid label{display:block;font-size:13px}
+.wgrid output{float:right;color:var(--accent);font-weight:800}
+.wgrid input[type=range]{margin:10px 0 2px}
+.reset{font:inherit;font-weight:800;font-size:13px;color:var(--accent);background:var(--accent-soft);border:0;border-radius:99px;padding:8px 14px;cursor:pointer;justify-self:start}
+@media (min-width:980px){.panel .weights{grid-column:1/-1;border-left:0;padding-left:0;border-top:2px dashed var(--line);padding-top:12px}}
+
+.livebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px;font-weight:700;color:var(--muted)}
+.livebar::before{content:"Data:";margin-right:2px}
+.ls{padding:3px 10px;border-radius:99px;background:var(--surface);box-shadow:var(--shadow)}
+.ls::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--line);vertical-align:1px}
+.ls.live{color:var(--good)} .ls.live::before{background:var(--good);box-shadow:0 0 0 3px var(--good-bg)}
+.ls.loading::before{background:var(--sun)} .ls.demo::before{background:var(--muted);opacity:.5}
+.lv{font-family:var(--body);font-size:10px;font-weight:800;color:var(--good);background:var(--good-bg);padding:1px 6px;border-radius:99px;vertical-align:2px;text-transform:uppercase;letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="sun" aria-hidden="true"></div>
+    <span class="eyebrow">Tideline · San Diego beach finder</span>
+    <h1>Find your <em>perfect beach</em> today</h1>
+    <p class="sub">Drop a pin, pick a time, and we'll rank the beaches near you by clean water, safe swimming, warm water and how crowded it'll be.</p>
+  </div>
+  <svg class="wave" viewBox="0 0 1200 34" preserveAspectRatio="none" aria-hidden="true"><path d="M0 18 C150 4 300 4 450 18 S750 32 900 18 S1100 4 1200 14 V34 H0Z" fill="var(--bg)"/></svg>
+</header>
+
+<div class="wrap">
+<main class="home" id="home">
+ <aside class="side">
+  <section class="panel" aria-label="Trip options">
+    <label for="radius">How far will you go? <output id="radiusOut" for="radius">10 miles</output>
+      <input type="range" id="radius" min="0" max="50" step="1" value="10">
+      <span class="ticks" aria-hidden="true"><span>0</span><span>25</span><span>50 mi</span></span>
+    </label>
+    <label for="day">Which day?
+      <select id="day"></select>
+    </label>
+    <label for="hour">Arriving around
+      <select id="hour"></select>
+    </label>
+    <details class="weights full" id="prio">
+      <summary>What matters to you? <span class="pill q">Dirty water always ranks last</span><span class="hint">Adjust priorities</span></summary>
+      <div class="wgrid">
+        <label for="w-safety">Swim safety <output id="o-safety"></output><input type="range" id="w-safety" data-k="safety" min="0" max="60"></label>
+        <label for="w-comfort">Warm water <output id="o-comfort"></output><input type="range" id="w-comfort" data-k="comfort" min="0" max="60"></label>
+        <label for="w-crowds">Fewer crowds <output id="o-crowds"></output><input type="range" id="w-crowds" data-k="crowds" min="0" max="60"></label>
+        <label for="w-weather">Nice weather <output id="o-weather"></output><input type="range" id="w-weather" data-k="weather" min="0" max="60"></label>
+        <label for="w-drive">Short drive <output id="o-drive"></output><input type="range" id="w-drive" data-k="drive" min="0" max="60"></label>
+        <button type="button" class="reset" id="w-reset">Reset to defaults</button>
+      </div>
+    </details>
+  </section>
+
+  <div class="livebar" id="livebar" aria-live="polite"></div>
+  <section class="mapbox" aria-label="Map of San Diego">
+    <div id="map" aria-label="Map of San Diego"></div>
+    <button class="locate" id="locate" type="button">Use my location</button>
+    <div class="maphint" id="maphint">Tap the map or drag the pin to move it</div>
+  </section>
+ </aside>
+ <section class="results">
+
+  <div class="meta"><h2>Your best bets</h2><span id="count"></span></div>
+  <ol class="list" id="list"></ol>
+ </section>
+</main>
+<article class="bp" id="beachpage" hidden></article>
+
+  <p class="demo"><b>Demo data</b><span>Official sources: lifeguard conditions from <a href="https://safebeachday.com/" target="_blank" rel="noopener">Safe Beach Day</a> and water quality from the <a href="https://www.sdbeachinfo.com/" target="_blank" rel="noopener">County of San Diego</a>. Weather is live from the National Weather Service, and tides and water temperature are live from NOAA. Water quality, waves, rip risk and bus fullness are realistic examples until live sources are added. Crowds come from a historical model of each beach's attendance by month, day, hour, weather and events.</span></p>
+</div>
+
+<script>
+// ---------- DATA LAYER (replace these with real API calls later) ----------
+const PLACES = [
+  ["Downtown San Diego",32.7157,-117.1611],["Pacific Beach",32.7980,-117.2400],["Point Loma",32.7300,-117.2300],
+  ["North Park",32.7480,-117.1300],["Hillcrest",32.7480,-117.1640],["UCSD / La Jolla",32.8801,-117.2340],
+  ["Clairemont",32.8300,-117.2000],["Chula Vista",32.6401,-117.0842],["National City",32.6781,-117.0992],
+  ["SDSU",32.7757,-117.0719],["Encinitas",33.0370,-117.2920],["Carlsbad",33.1581,-117.3506],["Oceanside",33.1959,-117.3795]
+];
+
+// quality: good | advisory | closed. rip: low|moderate|high. surf in ft. pop 1-3. tide described for the next few hours.
+const BEACHES = [
+  {name:"Oceanside City Beach",lat:33.1936,lng:-117.3831,pop:3,quality:"good",rip:"moderate",surf:3.5,tide:"Rising, high 4.8 ft at 3:10 pm",waterF:63,airF:70,sky:"sunny",event:"Farmers market nearby",lifeguard:true,buses:[["NCTD 101",62],["NCTD 302",30]]},
+  {name:"Buccaneer Beach",lat:33.1795,lng:-117.3700,pop:1,quality:"good",rip:"low",surf:2.5,tide:"Rising, high 4.8 ft at 3:10 pm",waterF:63,airF:70,sky:"sunny",event:null,lifeguard:true,buses:[["NCTD 101",62]]},
+  {name:"Carlsbad State Beach",lat:33.1580,lng:-117.3540,pop:2,quality:"good",rip:"low",surf:2.5,tide:"Rising, high 4.8 ft at 3:12 pm",waterF:63,airF:71,sky:"sunny",event:null,lifeguard:true,buses:[["NCTD 101",55]]},
+  {name:"Tamarack Beach",lat:33.1475,lng:-117.3460,pop:2,quality:"advisory",rip:"low",surf:2.5,tide:"Rising, high 4.8 ft at 3:12 pm",waterF:63,airF:71,sky:"sunny",event:null,lifeguard:true,buses:[["NCTD 101",55]]},
+  {name:"South Carlsbad State Beach",lat:33.1010,lng:-117.3190,pop:1,quality:"good",rip:"moderate",surf:3,tide:"Rising, high 4.8 ft at 3:15 pm",waterF:63,airF:71,sky:"sunny",event:null,lifeguard:true,buses:[["NCTD 101",40]]},
+  {name:"Moonlight Beach",lat:33.0475,lng:-117.2980,pop:3,quality:"good",rip:"low",surf:2,tide:"Rising, high 4.7 ft at 3:15 pm",waterF:64,airF:72,sky:"sunny",event:"Volleyball tournament",lifeguard:true,buses:[["NCTD 101",88]]},
+  {name:"Swami's",lat:33.0345,lng:-117.2930,pop:2,quality:"good",rip:"moderate",surf:4,tide:"Rising, high 4.7 ft at 3:15 pm",waterF:64,airF:72,sky:"sunny",event:null,lifeguard:false,buses:[["NCTD 101",88]]},
+  {name:"Cardiff State Beach",lat:33.0130,lng:-117.2810,pop:2,quality:"advisory",rip:"low",surf:2.5,tide:"Rising, high 4.7 ft at 3:18 pm",waterF:64,airF:72,sky:"sunny",event:null,lifeguard:true,buses:[["NCTD 101",70]]},
+  {name:"Fletcher Cove, Solana Beach",lat:32.9915,lng:-117.2735,pop:2,quality:"good",rip:"low",surf:2,tide:"Rising, high 4.7 ft at 3:18 pm",waterF:64,airF:72,sky:"sunny",event:null,lifeguard:true,buses:[["NCTD 101",48]]},
+  {name:"Del Mar City Beach",lat:32.9595,lng:-117.2685,pop:3,quality:"good",rip:"low",surf:2,tide:"Rising, high 4.7 ft at 3:20 pm",waterF:64,airF:73,sky:"sunny",event:"Dog beach day",lifeguard:true,buses:[["NCTD 101",48]]},
+  {name:"Torrey Pines State Beach",lat:32.9330,lng:-117.2600,pop:2,quality:"good",rip:"moderate",surf:3,tide:"Rising, high 4.7 ft at 3:20 pm",waterF:64,airF:73,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 101",35]]},
+  {name:"Black's Beach",lat:32.8890,lng:-117.2530,pop:1,quality:"good",rip:"high",surf:5.5,tide:"Rising, high 4.7 ft at 3:22 pm",waterF:64,airF:73,sky:"sunny",event:null,lifeguard:false,buses:[["MTS 30",60]]},
+  {name:"La Jolla Shores",lat:32.8580,lng:-117.2570,pop:3,quality:"good",rip:"low",surf:1.5,tide:"Rising, high 4.6 ft at 3:24 pm",waterF:65,airF:74,sky:"sunny",event:"Kayak tours running",lifeguard:true,buses:[["MTS 30",92],["MTS 202",40]]},
+  {name:"La Jolla Cove",lat:32.8505,lng:-117.2730,pop:3,quality:"advisory",rip:"low",surf:1.5,tide:"Rising, high 4.6 ft at 3:24 pm",waterF:65,airF:74,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 30",92]]},
+  {name:"Windansea Beach",lat:32.8300,lng:-117.2810,pop:2,quality:"good",rip:"high",surf:5,tide:"Rising, high 4.6 ft at 3:25 pm",waterF:65,airF:74,sky:"sunny",event:null,lifeguard:false,buses:[["MTS 30",75]]},
+  {name:"Pacific Beach",lat:32.7960,lng:-117.2560,pop:3,quality:"good",rip:"moderate",surf:3,tide:"Rising, high 4.6 ft at 3:26 pm",waterF:65,airF:74,sky:"sunny",event:"Beach cleanup 10 am",lifeguard:true,buses:[["MTS 8",95],["MTS 30",80]]},
+  {name:"Bonita Cove, Mission Bay",lat:32.7650,lng:-117.2440,pop:2,quality:"good",rip:"low",surf:0,tide:"Rising, high 4.6 ft at 3:30 pm",waterF:66,airF:75,sky:"sunny",event:null,lifeguard:false,buses:[["MTS 8",70]]},
+  {name:"Mission Beach",lat:32.7700,lng:-117.2525,pop:3,quality:"good",rip:"moderate",surf:3,tide:"Rising, high 4.6 ft at 3:28 pm",waterF:65,airF:75,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 8",95]]},
+  {name:"Ocean Beach",lat:32.7490,lng:-117.2510,pop:3,quality:"advisory",rip:"moderate",surf:3.5,tide:"Rising, high 4.6 ft at 3:30 pm",waterF:65,airF:75,sky:"sunny",event:"OB pier market",lifeguard:true,buses:[["MTS 35",65],["MTS 923",30]]},
+  {name:"Coronado Central Beach",lat:32.6820,lng:-117.1820,pop:3,quality:"advisory",rip:"low",surf:2,tide:"Rising, high 4.6 ft at 3:34 pm",waterF:66,airF:75,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 901",58],["MTS 904",20]]},
+  {name:"Silver Strand State Beach",lat:32.6340,lng:-117.1420,pop:1,quality:"closed",rip:"low",surf:2,tide:"Rising, high 4.6 ft at 3:35 pm",waterF:66,airF:75,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 901",45]]},
+  {name:"Imperial Beach",lat:32.5790,lng:-117.1340,pop:2,quality:"closed",rip:"moderate",surf:3,tide:"Rising, high 4.6 ft at 3:36 pm",waterF:66,airF:76,sky:"sunny",event:null,lifeguard:true,buses:[["MTS 933",50],["MTS 934",38]]},
+  {name:"Border Field State Park",lat:32.5370,lng:-117.1230,pop:1,quality:"closed",rip:"high",surf:4,tide:"Rising, high 4.6 ft at 3:38 pm",waterF:66,airF:76,sky:"sunny",event:null,lifeguard:false,buses:[]}
+];
+
+// ---------- HISTORICAL CROWD MODEL ----------
+// Peak = typical people on the sand on a summer Sunday ~1-2 pm (baseline estimates; replace with
+// City/County lifeguard attendance counts reported to USLA when you get them).
+const PEAK={"Oceanside City Beach":16000,"Buccaneer Beach":2500,"Carlsbad State Beach":7000,"Tamarack Beach":5000,
+ "South Carlsbad State Beach":4500,"Moonlight Beach":9000,"Swami's":3000,"Cardiff State Beach":5000,
+ "Fletcher Cove, Solana Beach":3500,"Del Mar City Beach":11000,"Torrey Pines State Beach":6000,"Black's Beach":2500,
+ "La Jolla Shores":16000,"La Jolla Cove":6000,"Windansea Beach":2500,"Pacific Beach":26000,"Bonita Cove, Mission Bay":5000,
+ "Mission Beach":30000,"Ocean Beach":15000,"Coronado Central Beach":12000,"Silver Strand State Beach":4000,
+ "Imperial Beach":6000,"Border Field State Park":600};
+// Share of peak attendance, from seasonal/weekly/hourly patterns in lifeguard counts.
+const MONTH=[.25,.28,.38,.48,.62,.82,1,1,.75,.5,.33,.27];          // Jan..Dec
+const DOW=[1,.5,.45,.45,.5,.6,.95];                                // Sun..Sat
+const HOUR={6:.05,7:.08,8:.15,9:.28,10:.5,11:.72,12:.9,13:1,14:1,15:.92,16:.75,17:.55,18:.35,19:.15};
+const HOLIDAYS=["01-01","05-25","07-04","09-07","11-26","12-25"]; // add Memorial/Labor Day for the year
+function crowdAt(b,date){
+  const h=date.getHours(), md=String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+  let f=MONTH[date.getMonth()]*(HOLIDAYS.includes(md)?1.1:DOW[date.getDay()])*(HOUR[h]??.02);
+  const lw=liveWx(b,date)||b;
+  f*=({sunny:1,partly:.9,cloudy:.7,windy:.6,rain:.2}[lw.sky]??.8)*clamp(1+(lw.airF-65)*.03,.6,1.3);
+  if(b.event) f*=1.25;
+  const people=Math.round(PEAK[b.name]*f/50)*50;
+  return {people,ratio:f};
+}
+const pct=r=>Math.round(clamp(r,0,1)*100);
+const crowdLabel=r=>r>=.75?"Packed":r>=.5?"Busy":r>=.25?"Moderate":"Quiet";
+
+// ---------- SCORING ----------
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function miles(a,b,c,d){const R=3958.8,r=Math.PI/180,dl=(c-a)*r,dg=(d-b)*r;
+  const h=Math.sin(dl/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+
+// ---------- LIVE DATA (free, no API keys) ----------
+// Weather: National Weather Service hourly forecast (api.weather.gov)
+// Tides + water temperature: NOAA Tides & Currents (api.tidesandcurrents.noaa.gov)
+// Anything that fails to load falls back to the demo values in BEACHES.
+const LIVE={wx:{},tides:{},water:{},status:{weather:"loading",tides:"loading",water:"loading"},updated:null};
+const TIDE_STATIONS={"9410230":"La Jolla (Scripps Pier)","9410170":"San Diego Bay"};
+const tideStation=b=>b.lat>32.72?"9410230":"9410170";
+const SKY_LABEL={sunny:"Sunny",partly:"Partly cloudy",cloudy:"Cloudy",windy:"Windy",rain:"Rain"};
+function skyFrom(short,wind,pop){
+  if(pop>=50||/rain|shower|drizzle|thunder/i.test(short))return "rain";
+  if(wind>=18)return "windy";
+  if(/partly|mostly sunny|mostly clear/i.test(short))return "partly";
+  if(/cloud|overcast|fog|haze/i.test(short))return "cloudy";
+  return "sunny";
+}
+const hourKey=d=>{const x=new Date(d);x.setMinutes(0,0,0);return x.getTime();};
+function liveWx(b,date){const m=LIVE.wx[b.name];return m?m[hourKey(date)]||null:null;}
+async function getJSON(url){const r=await fetch(url,{headers:{Accept:"application/geo+json, application/json"}});if(!r.ok)throw new Error(r.status);return r.json();}
+async function pool(items,n,fn){const q=[...items];await Promise.all(Array.from({length:n},async()=>{while(q.length){const it=q.shift();try{await fn(it);}catch(e){}}}));}
+async function loadWeather(){
+  const byUrl={};
+  await pool(BEACHES,4,async b=>{
+    const pt=await getJSON(`https://api.weather.gov/points/${b.lat.toFixed(4)},${b.lng.toFixed(4)}`);
+    const u=pt.properties&&pt.properties.forecastHourly; if(u)(byUrl[u]=byUrl[u]||[]).push(b.name);
+  });
+  await pool(Object.keys(byUrl),4,async u=>{
+    const j=await getJSON(u); const map={};
+    for(const p of j.properties.periods){
+      const wind=parseInt(p.windSpeed)||0, pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value)||0;
+      map[hourKey(p.startTime)]={airF:p.temperatureUnit==="C"?Math.round(p.temperature*9/5+32):p.temperature,sky:skyFrom(p.shortForecast,wind,pop),wind,pop,short:p.shortForecast};
+    }
+    byUrl[u].forEach(n=>LIVE.wx[n]=map);
+  });
+  LIVE.status.weather=Object.keys(LIVE.wx).length?"live":"demo";
+}
+function ymd(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");}
+const NOAA="https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?application=Tideline&units=english&time_zone=lst_ldt&format=json";
+async function loadTides(){
+  const start=new Date(NOW);start.setDate(start.getDate()-1);
+  await pool(Object.keys(TIDE_STATIONS),2,async st=>{
+    const j=await getJSON(`${NOAA}&station=${st}&product=predictions&datum=MLLW&interval=hilo&begin_date=${ymd(start)}&range=216`);
+    LIVE.tides[st]=(j.predictions||[]).map(p=>({t:new Date(p.t.replace(" ","T")).getTime(),v:+p.v,type:p.type}));
+  });
+  LIVE.status.tides=Object.keys(LIVE.tides).length?"live":"demo";
+}
+async function loadWaterTemp(){
+  await pool(Object.keys(TIDE_STATIONS),2,async st=>{
+    const j=await getJSON(`${NOAA}&station=${st}&product=water_temperature&date=latest`);
+    const d=j.data&&j.data[0]; if(d&&isFinite(+d.v)) LIVE.water[st]={f:Math.round(+d.v),t:d.t};
+  });
+  LIVE.status.water=Object.keys(LIVE.water).length?"live":"demo";
+}
+const fmtClock=t=>new Date(t).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}).toLowerCase();
+function liveTide(b,date){
+  const list=LIVE.tides[tideStation(b)]; if(!list||!list.length) return null;
+  const t=date.getTime(); const i=list.findIndex(p=>p.t>t); if(i<=0) return null;
+  const prev=list[i-1], next=list[i];
+  const frac=(t-prev.t)/(next.t-prev.t), height=prev.v+(next.v-prev.v)*(1-Math.cos(Math.PI*frac))/2;
+  const rising=next.type==="H";
+  return {height,rising,text:`${rising?"Rising":"Falling"}, ${rising?"high":"low"} ${next.v.toFixed(1)} ft at ${fmtClock(next.t)}`};
+}
+function applyLive(b,date){
+  const w=liveWx(b,date); if(w){b.airF=w.airF;b.sky=w.sky;b.wind=w.wind;b.pop=w.pop;b.wxLive=true;}
+  const td=liveTide(b,date); if(td){b.tide=td.text;b.tideFt=td.height;b.tideLive=true;}
+  const wt=LIVE.water[tideStation(b)]; if(wt){b.waterF=wt.f;b.waterLive=TIDE_STATIONS[tideStation(b)];}
+}
+function liveBadge(){
+  const s=LIVE.status, item=(k,l)=>`<span class="ls ${s[k]}">${l}${s[k]==="live"?"":s[k]==="loading"?" (loading…)":" (demo)"}</span>`;
+  $("livebar").innerHTML=`${item("weather","Weather")}${item("tides","Tides")}${item("water","Water temp")}<span class="ls demo">Water quality, waves, rip risk, buses (demo)</span>`;
+}
+async function loadLive(){
+  liveBadge();
+  const tasks=[["weather",loadWeather],["tides",loadTides],["water",loadWaterTemp]];
+  await Promise.all(tasks.map(async([k,fn])=>{try{await fn();}catch(e){LIVE.status[k]="demo";}liveBadge();render();}));
+}
+
+// ---------- TIDELINE SCORE: Score = 100 x G (water quality) x Q (conditions) ----------
+// Demo inputs for things we don't have live feeds for yet.
+const RAIN={in72h:0,hoursSince:72};            // inches of rain in the last 72 h, hours since it stopped
+const TIJUANA={L:0.7,S:0.4};                    // river pollution level 0-1, share of swell from S-SW 0-1
+const EXPOSURE={"Coronado Central Beach":1,"Silver Strand State Beach":1,"Imperial Beach":2,"Border Field State Park":2};
+const PERIOD={"Bonita Cove, Mission Bay":0};    // wave period in seconds (default 12 s on the open coast)
+const STATUS_MULT={good:1,untested:.85,advisory:.35,closed:.03};
+const STATUS_NAME={good:"Clean",untested:"Not tested",advisory:"Advisory",closed:"Closed"};
+const SUN=[[6.9,17.2],[6.7,17.6],[7,19],[6.4,19.3],[5.9,19.7],[5.7,20],[5.9,20],[6.2,19.6],[6.6,19],[7,18.4],[6.3,16.9],[6.7,16.8]]; // sunrise,sunset by month
+const DEFAULT_W={safety:35,comfort:25,crowds:20,weather:12,drive:8};
+let W={...DEFAULT_W};
+try{const s=JSON.parse(localStorage.getItem("tideline-weights"));if(s&&Object.keys(DEFAULT_W).every(k=>isFinite(s[k])))W=s;}catch(e){}
+function waterGate(b){
+  const status=STATUS_MULT[b.quality]??.85;
+  const runoff=1-0.6*Math.min(1,RAIN.in72h/0.5)*Math.max(0,1-RAIN.hoursSince/72);
+  const tij=1-0.45*(EXPOSURE[b.name]||0)*TIJUANA.L*(0.5+0.5*TIJUANA.S);
+  return {G:status*runoff*Math.max(0,tij),status,runoff,tij:Math.max(0,tij)};
+}
+function score(b,when){
+  applyLive(b,when);
+  const cr=crowdAt(b,when); b.people=cr.people; b.ratio=cr.ratio; b.crowd=crowdLabel(cr.ratio);
+  // Swim safety
+  const H=b.surf*0.3048, T=PERIOD[b.name]??12, P=0.49*H*H*T;           // wave power kW/m
+  const rip={low:1,moderate:.6,high:.2}[b.rip];
+  const waves=Math.exp(-P/9.2);
+  const tide=b.tideFt!=null?(b.tideFt<0.5?.8:b.tideFt<1.2?.9:1):(/low/i.test(b.tide)?.85:1);
+  const chop=b.wind!=null?(b.wind>=15?.7:b.wind>=10?.85:1):(b.sky==="windy"?.7:1);
+  const [rise,set]=SUN[when.getMonth()], hr=when.getHours()+.5;
+  const daylight=hr>=rise&&hr<=set?1:.15;
+  const swimmable=1;
+  const safety=Math.pow(rip,.5)*Math.pow(waves,.3)*Math.pow(tide,.1)*Math.pow(chop,.1)*daylight*swimmable;
+  // Water comfort: perfect 70-77F, falls off quickly when colder
+  const t=b.waterF, comfort=t<70?Math.exp(-Math.pow((70-t)/7.46,2)):t>77?Math.exp(-Math.pow((t-77)/5,2)):1;
+  // Crowds: logistic on busyness 0-100
+  const busy=clamp(cr.ratio,0,1)*100, crowds=1/(1+Math.exp((busy-55)/12));
+  // Weather: feels-like temperature x sky (rain, wind, clouds)
+  const weather=Math.exp(-Math.pow((b.airF-78)/14,2))*({sunny:.98,partly:.9,cloudy:.75,windy:.6,rain:.25}[b.sky]??.8);
+  // Drive time: free up to 10 minutes, each extra minute costs a little more
+  const mins=b.d!=null?Math.max(5,Math.round(b.d*1.3/28*60)):15;
+  const drive=mins<=10?1:Math.exp(-Math.pow((mins-10)/18.6,2));
+  const x={safety,comfort,crowds,weather,drive};
+  const tot=Object.values(W).reduce((a,c)=>a+c,0)||1, w={};for(const k in W)w[k]=W[k]/tot;
+  let geo=1,avg=0;for(const k in x){const v=Math.max(x[k],1e-4);geo*=Math.pow(v,w[k]);avg+=w[k]*x[k];}
+  const Q=0.6*geo+0.4*avg;
+  const g=waterGate(b);
+  const total=100*g.G*Q;
+  return {total:Math.round(total),exact:total,Q,G:g.G,gate:g,x,w,P,daylight,mins};
+}
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+// ---------- MAP (Leaflet + free OpenStreetMap / Esri tiles, no API key needed) ----------
+const TOWNS=[["Oceanside",33.196,-117.33],["Carlsbad",33.13,-117.29],["Encinitas",33.045,-117.255],["Del Mar",32.96,-117.225],["La Jolla",32.84,-117.235],["Pacific Beach",32.80,-117.225],["Clairemont",32.83,-117.19],["Mira Mesa",32.915,-117.14],["Ocean Beach",32.745,-117.225],["Downtown",32.716,-117.16],["North Park",32.748,-117.13],["Coronado",32.682,-117.205],["National City",32.678,-117.10],["Chula Vista",32.64,-117.06],["Imperial Beach",32.58,-117.10],["UCSD",32.88,-117.225],["SDSU",32.775,-117.072],["Escondido",33.12,-117.05]];
+let pin={lat:32.7157,lng:-117.1611};
+try{const s=JSON.parse(localStorage.getItem("sdbf-pin")); if(s&&isFinite(s.lat)&&isFinite(s.lng))pin=s;}catch(e){}
+const lmap=L.map("map",{zoomControl:true}).setView([32.85,-117.2],10);
+// Free tiles, no API key. OpenStreetMap needs the page served from a web address (it blocks files
+// opened straight from your computer), so local files use Esri's free street map instead.
+function makeTiles(){
+  return location.protocol==="file:"
+    ? L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'})
+    : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});
+}
+makeTiles().addTo(lmap);
+const ring=L.circle(pin,{radius:16093,color:"#1B8FA6",weight:2,fillColor:"#1B8FA6",fillOpacity:.08,interactive:false}).addTo(lmap);
+const pinIcon=L.divIcon({className:"",html:'<div class="lpin"></div>',iconSize:[24,24],iconAnchor:[12,12]});
+const pinMarker=L.marker(pin,{draggable:true,icon:pinIcon,zIndexOffset:1000,title:"Your starting point"}).addTo(lmap);
+const dotLayer=L.layerGroup().addTo(lmap);
+function setPin(lat,lng,pan){
+  pin={lat,lng};
+  try{localStorage.setItem("sdbf-pin",JSON.stringify(pin))}catch(e){}
+  pinMarker.setLatLng(pin); if(pan) lmap.setView(pin,11);
+  render();
+}
+pinMarker.on("dragend",e=>{const p=e.target.getLatLng();setPin(p.lat,p.lng,false);});
+lmap.on("click",e=>setPin(e.latlng.lat,e.latlng.lng,false));
+function openBeach(n){location.hash=slug(n);}
+function nearestTown(){let best=TOWNS[0],bd=1e9;for(const t of TOWNS){const d=miles(pin.lat,pin.lng,t[1],t[2]);if(d<bd){bd=d;best=t;}}return best[0];}
+const COLORS={good:"#2E9E6E",ok:"#1B8FA6",meh:"#FFC94D",bad:"#E0503D"};
+function drawMap(all,R){
+  ring.setLatLng(pin); ring.setRadius(R*1609.34);
+  dotLayer.clearLayers();
+  for(const b of all){
+    const c=b.quality==="closed"?COLORS.bad:b.s.total>=70?COLORS.good:b.s.total>=45?COLORS.ok:COLORS.meh;
+    L.circleMarker([b.lat,b.lng],{radius:8,color:"#fff",weight:2,fillColor:c,fillOpacity:b.d>R?.4:1,opacity:b.d>R?.5:1})
+      .bindTooltip(`<b>${b.name}</b><br>${b.s.total}/100`,{direction:"top",offset:[0,-6]})
+      .on("click",e=>{L.DomEvent.stopPropagation(e);openBeach(b.name);})
+      .addTo(dotLayer);
+  }
+}
+$("locate").addEventListener("click",e=>{
+  e.stopPropagation();
+  if(!navigator.geolocation){$("maphint").textContent="Your browser can't share location. Tap the map instead.";return;}
+  $("maphint").textContent="Finding you…";
+  navigator.geolocation.getCurrentPosition(p=>{$("maphint").textContent="Tap the map or drag the pin to move it";setPin(p.coords.latitude,p.coords.longitude,true);},
+    ()=>{$("maphint").textContent="Couldn't get your location. Tap the map instead.";},{enableHighAccuracy:true,timeout:10000});
+});
+const NOW=new Date();
+for(let i=0;i<7;i++){const d=new Date(NOW);d.setDate(d.getDate()+i);
+  $("day").add(new Option(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"}),i));}
+const fmtH=h=>(h%12||12)+(h<12?" AM":" PM");
+for(let h=7;h<=19;h++) $("hour").add(new Option(fmtH(h),h));
+$("hour").value=String(clamp(NOW.getHours(),7,19));
+function when(hour){const d=new Date(NOW);d.setDate(d.getDate()+ +$("day").value);d.setHours(hour??+$("hour").value,0,0,0);return d;}
+let open=null;
+function origin(){ return {name:"your pin near "+nearestTown(),lat:pin.lat,lng:pin.lng}; }
+const qChip=q=>q==="good"?'<span class="chip g">Water clean</span>':q==="advisory"?'<span class="chip w">Water advisory</span>':'<span class="chip b">Closed: contamination</span>';
+const ripChip=r=>`<span class="chip ${r==="low"?"g":r==="moderate"?"w":"b"}">Rip risk ${r}</span>`;
+const crowdChip=(c,r)=>`<span class="chip ${c==="Quiet"?"g":c==="Moderate"?"":"w"}">${c} · ${pct(r)}% busy</span>`;
+const fullTxt=p=>p>=90?["Full","b"]:p>=70?["Filling up","w"]:["Seats open","g"];
+
+function hourly(b){
+  const hrs=[];for(let h=8;h<=18;h++)hrs.push([h,crowdAt(b,when(h))]);
+  const sel=+$("hour").value;
+  const quiet=hrs.filter(x=>x[0]>=10&&x[0]<=16).sort((a,c)=>a[1].ratio-c[1].ratio)[0];
+  return `<div class="spark">${hrs.map(([h,c])=>`<div class="col${h===sel?" on":""}" tabindex="0" aria-label="${fmtH(h)}: ${pct(c.ratio)}% busy, ${crowdLabel(c.ratio)}"><b class="tip">${fmtH(h)}<br>${pct(c.ratio)}% busy · ${crowdLabel(c.ratio)}</b><i style="height:${Math.max(4,pct(c.ratio))}%"></i><span>${h%12||12}</span></div>`).join("")}</div>
+  <div class="note">Quietest time to go: <b>${fmtH(quiet[0])}</b> (${pct(quiet[1].ratio)}% busy)</div>`;
+}
+function render(){
+  if(!$("beachpage").hidden){const h=decodeURIComponent(location.hash.slice(1));const b=BEACHES.find(x=>slug(x.name)===h);if(b){renderBeach(b.name);}}
+  const o=origin(), R=+$("radius").value;
+  const all=BEACHES.map(b=>{const x={...b,d:miles(o.lat,o.lng,b.lat,b.lng)};x.s=score(x,when());return x;});
+  drawMap(all,R);
+  const rows=all.filter(b=>b.d<=R)
+    .sort((a,b)=>((a.quality==="closed")-(b.quality==="closed"))||(b.s.total-a.s.total)||(a.d-b.d));
+  lastRows=rows;
+  $("count").textContent=`${rows.length} beach${rows.length===1?"":"es"} within ${R} mi of ${o.name}`;
+  if(!rows.length){$("list").innerHTML=`<li class="empty">${R===0?"Slide the distance above 0 to see beaches.":`No beaches within ${R} miles. Try sliding the distance farther.`}</li>`;return;}
+  $("list").innerHTML=rows.map((b,i)=>{
+    const c=b.quality==="closed"?"var(--bad)":b.s.total>=70?"var(--good)":b.s.total>=45?"var(--accent)":"var(--sun)";
+    const v=b.quality==="closed"?["Closed today","var(--bad)","var(--surface)"]:b.s.total>=70?["Great pick","var(--good)","var(--good-bg)"]:b.s.total>=45?["Pretty good","var(--accent)","var(--accent-soft)"]:["Just okay","var(--warn)","var(--warn-bg)"];
+    const ph=PHOTOS[b.name];
+    return `<li class="card ${b.quality==="closed"?"closed":""} ${i===0&&b.quality!=="closed"?"top":""}" tabindex="0" data-n="${b.name}" role="link" aria-label="${b.name}, score ${b.s.total}. Open details">
+      <div class="ph" ${ph?`style="--img:url('${ph.url}')"`:""}>
+        <div class="rank">${i+1}</div>
+        ${ph?`<span class="credit" title="${ph.credit}">Photo: Wikimedia Commons</span>`:""}
+        <div class="ph-text"><span class="verdict" style="--vc:${v[1]};--vb:${v[2]}">${i===0&&b.quality!=="closed"?"Top pick":v[0]}</span><h3 class="name">${b.name}</h3><div class="dist">${b.d.toFixed(1)} mi away${b.event?" · "+b.event:""}</div></div>
+        <div class="dial" style="--p:${b.s.total};--c:${c}"><span>${b.s.total}<small>of 100</small></span></div>
+      </div>
+      <div class="cb">
+        ${b.quality==="closed"?'<div class="alert">Do not swim. County closure for sewage-contaminated water.</div>':""}
+        <div class="chips">${qChip(b.quality)}${ripChip(b.rip)}<span class="chip">${b.waterF}°F water</span>${crowdChip(b.crowd,b.ratio)}<span class="chip">${SKY_LABEL[b.sky]||b.sky} ${b.airF}°F</span></div>
+        <div class="go">See full details →</div>
+      </div>
+    </li>`}).join("");
+}
+$("list").addEventListener("click",e=>{const c=e.target.closest(".card");if(c)openBeach(c.dataset.n);});
+$("list").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("card")){e.preventDefault();e.target.click();}});
+function syncRadius(){const v=+$("radius").value;$("radiusOut").textContent=v===1?"1 mile":v+" miles";$("radius").style.setProperty("--fill",(v/50*100)+"%");}
+$("radius").addEventListener("input",()=>{syncRadius();
+render();});
+syncRadius();
+function syncWeights(){const tot=Object.values(W).reduce((a,c)=>a+c,0)||1;
+  for(const k in W){const el=$("w-"+k);el.value=W[k];el.style.setProperty("--fill",(W[k]/60*100)+"%");$("o-"+k).textContent=Math.round(W[k]/tot*100)+"%";}}
+document.querySelectorAll("#prio input[type=range]").forEach(el=>el.addEventListener("input",()=>{W[el.dataset.k]=+el.value;try{localStorage.setItem("tideline-weights",JSON.stringify(W))}catch(e){};syncWeights();render();}));
+$("w-reset").addEventListener("click",()=>{W={...DEFAULT_W};try{localStorage.removeItem("tideline-weights")}catch(e){};syncWeights();render();});
+syncWeights();
+$("day").addEventListener("change",render);
+$("hour").addEventListener("change",render);
+// ---------- TROLLEY / RAIL DIRECTIONS (plan data: confirm routes and times on sdmts.com) ----------
+const LINE_COLORS={Blue:"#1E66D0",Green:"#2E9E4E",Orange:"#E8801F",COASTER:"#4B5A9B"};
+const STATIONS=[
+ ["San Ysidro",32.5431,-117.0293,["Blue"]],["Iris Ave",32.5655,-117.0645,["Blue"]],["Palm Ave",32.5853,-117.0827,["Blue"]],
+ ["H St (Chula Vista)",32.6309,-117.0841,["Blue"]],["E St (Chula Vista)",32.6431,-117.0880,["Blue"]],["24th St (National City)",32.6603,-117.1048,["Blue"]],
+ ["8th St (National City)",32.6730,-117.1072,["Blue"]],["12th & Imperial",32.7057,-117.1536,["Blue","Orange","Green"]],
+ ["America Plaza / Santa Fe Depot",32.7165,-117.1696,["Blue","Green","Orange"]],["Old Town",32.7545,-117.1997,["Blue","Green"]],
+ ["Tecolote Rd",32.7840,-117.2025,["Blue"]],["Clairemont Dr",32.7908,-117.2063,["Blue"]],["Balboa Ave",32.8070,-117.2152,["Blue"]],
+ ["Nobel Dr",32.8650,-117.2240,["Blue"]],["UC San Diego Central Campus",32.8796,-117.2366,["Blue"]],["UTC",32.8707,-117.2116,["Blue"]],
+ ["Fashion Valley",32.7647,-117.1667,["Green"]],["Mission Valley Center",32.7685,-117.1520,["Green"]],["Stadium",32.7798,-117.1220,["Green"]],
+ ["SDSU",32.7732,-117.0711,["Green"]],["Grossmont",32.7727,-117.0093,["Green","Orange"]],["Euclid Ave",32.7106,-117.0838,["Orange"]],
+ ["Lemon Grove",32.7425,-117.0331,["Orange"]],["El Cajon",32.7952,-116.9719,["Green","Orange"]]
+];
+// rail: which line + station you ride to; steps: what to do after getting off.
+const TROLLEY={
+ "Oceanside City Beach":{line:"COASTER",to:"Oceanside Transit Center",steps:["Walk about 0.5 mi west on Mission Ave to the pier and beach."]},
+ "Buccaneer Beach":{line:"COASTER",to:"Oceanside Transit Center",steps:["Take NCTD bus 101 south to Cassidy St.","Walk a block west to the beach."]},
+ "Carlsbad State Beach":{line:"COASTER",to:"Carlsbad Village",steps:["Walk about 0.4 mi west on Carlsbad Village Dr to the seawall."]},
+ "Tamarack Beach":{line:"COASTER",to:"Carlsbad Village",steps:["Walk about 0.7 mi southwest to Tamarack Ave and Carlsbad Blvd."]},
+ "South Carlsbad State Beach":{line:"COASTER",to:"Carlsbad Poinsettia",steps:["Walk about 0.6 mi west on Poinsettia Ln to the campground beach access."]},
+ "Moonlight Beach":{line:"COASTER",to:"Encinitas",steps:["Walk about 0.5 mi south and west down B St to the beach."]},
+ "Swami's":{line:"COASTER",to:"Encinitas",steps:["Walk about 1 mi south on Coast Hwy 101 to the Swami's stairs."]},
+ "Cardiff State Beach":{line:"COASTER",to:"Solana Beach",steps:["Take NCTD bus 101 north to Cardiff State Beach."]},
+ "Fletcher Cove, Solana Beach":{line:"COASTER",to:"Solana Beach",steps:["Walk about 0.4 mi west on Lomas Santa Fe Dr to Fletcher Cove."]},
+ "Del Mar City Beach":{line:"COASTER",to:"Solana Beach",steps:["Take NCTD bus 101 south into Del Mar village (15th St).","Walk two blocks west to the beach."]},
+ "Torrey Pines State Beach":{line:"Blue",to:"UTC",steps:["Take MTS bus 101 toward Del Mar.","Get off at N Torrey Pines Rd near the beach lot and walk to the sand."]},
+ "Black's Beach":{line:"Blue",to:"UC San Diego Central Campus",steps:["Walk about 1.3 mi west to the Torrey Pines Gliderport.","Take the steep cliff trail down (allow 20 minutes, wear real shoes)."]},
+ "La Jolla Shores":{line:"Blue",to:"UTC",steps:["Take MTS bus 30 toward La Jolla.","Get off near La Jolla Shores Dr and walk about 10 minutes down to the beach."]},
+ "La Jolla Cove":{line:"Blue",to:"Balboa Ave",steps:["Take MTS bus 30 north to La Jolla village (Girard Ave).","Walk about 0.3 mi to the cove."]},
+ "Windansea Beach":{line:"Blue",to:"Balboa Ave",steps:["Take MTS bus 30 north to La Jolla Blvd & Nautilus St.","Walk about 2 blocks west to the beach."]},
+ "Pacific Beach":{line:"Blue",to:"Balboa Ave",steps:["Take MTS bus 30 west toward Pacific Beach.","Get off at Garnet Ave & Mission Blvd and walk a block to Crystal Pier."]},
+ "Bonita Cove, Mission Bay":{line:"Blue",to:"Old Town",steps:["Take MTS bus 8 toward Mission Beach.","Get off at W Mission Bay Dr and walk to the cove."]},
+ "Mission Beach":{line:"Blue",to:"Old Town",steps:["Take MTS bus 8 toward Mission Beach.","Get off at Mission Blvd near Belmont Park and walk to the sand."]},
+ "Ocean Beach":{line:"Green",to:"Old Town",steps:["Take MTS bus 35 to Ocean Beach.","Get off on Newport Ave and walk 2 blocks to the pier."]},
+ "Coronado Central Beach":{line:"Blue",to:"America Plaza / Santa Fe Depot",steps:["Take MTS bus 901 to Orange Ave in Coronado.","Walk about 0.5 mi southwest to the beach by the Hotel del Coronado.","Fun option: walk to Broadway Pier and ride the Coronado ferry instead."]},
+ "Silver Strand State Beach":{line:"Blue",to:"America Plaza / Santa Fe Depot",steps:["Take MTS bus 901 south through Coronado to Silver Strand State Beach."]},
+ "Imperial Beach":{line:"Blue",to:"Palm Ave",steps:["Take MTS bus 933 or 934 west to Seacoast Dr.","Walk a block to the pier."]},
+ "Border Field State Park":{line:"Blue",to:"Iris Ave",steps:["Take MTS bus 933 to Imperial Beach.","Border Field is about 2 mi further south with no bus. Bike, walk or rideshare, and check if the park road is open."]}
+};
+const lineBadge=l=>`<span class="lb" style="--lc:${LINE_COLORS[l]}">${l==="COASTER"?"COASTER train":l+" Line"}</span>`;
+function trolleyPlan(b){
+  const plan=TROLLEY[b.name]; if(!plan) return "";
+  let st=STATIONS[0],sd=1e9;for(const s of STATIONS){const d=miles(pin.lat,pin.lng,s[1],s[2]);if(d<sd){sd=d;st=s;}}
+  const steps=[];
+  steps.push(`Go to <b>${st[0]}</b> station, ${sd.toFixed(1)} mi from your pin (${st[3].map(lineBadge).join(" ")}).`);
+  if(plan.line==="COASTER"){
+    if(st[0]!=="America Plaza / Santa Fe Depot") steps.push(`Ride the ${lineBadge(st[3].includes("Green")?"Green":st[3][0])} to <b>Santa Fe Depot</b> downtown${st[3].includes("Blue")||st[3].includes("Green")?"":" (switch at 12th & Imperial if needed)"}.`);
+    steps.push(`Board the ${lineBadge("COASTER")} heading north and get off at <b>${plan.to}</b>. There's no trolley in North County, so the COASTER is the rail option.`);
+  }else{
+    let line=plan.line;
+    if(st[0]===plan.to){ steps.pop(); steps.push(`You're right by <b>${plan.to}</b> station.`); }
+    else{
+      const target=STATIONS.find(s=>s[0]===plan.to), targetLines=target?target[3]:[line];
+      const shared=st[3].find(l=>targetLines.includes(l));
+      if(shared) steps.push(`Ride the ${lineBadge(shared)} to <b>${plan.to}</b>.`);
+      else{
+        const hub=st[3].includes("Orange")||targetLines.includes("Orange")?"12th & Imperial":"Old Town";
+        steps.push(`Ride the ${lineBadge(st[3][0])} to <b>${hub}</b>.`);
+        steps.push(`Switch to the ${lineBadge(targetLines[0])} and ride to <b>${plan.to}</b>.`);
+      }
+    }
+  }
+  plan.steps.forEach(x=>steps.push(x));
+  return `<section class="box"><h3>By trolley</h3>
+    <ol class="steps">${steps.map(x=>`<li>${x}</li>`).join("")}</ol>
+    <p class="note">Routes are a planning guide. Check times and service changes before you go.</p>
+    <div class="btns"><a href="https://www.sdmts.com/" target="_blank" rel="noopener">MTS trip planner</a><a class="alt" href="https://www.google.com/maps/dir/?api=1&origin=${pin.lat},${pin.lng}&destination=${b.lat},${b.lng}&travelmode=transit" target="_blank" rel="noopener">Open in Google Maps</a></div>
+  </section>`;
+}
+
+// ---------- ICONS (simple line drawings, 24x24) ----------
+const IC={
+ restroom:'<circle cx="7" cy="5" r="2"/><path d="M5 9h4l1 6H8v5H6v-5H4z"/><circle cx="17" cy="5" r="2"/><path d="M15 9h4v6h-1v5h-2v-5h-1z"/><path d="M12 3v18"/>',
+ shower:'<path d="M5 21V6a3 3 0 0 1 3-3h2a3 3 0 0 1 3 3v1"/><path d="M10 7h6l-1 3h-4z"/><path d="M11 13v1M13 13v1M15 13v1M11 16v1M13 16v1M15 16v1"/>',
+ lifeguard:'<path d="M6 21l3-11h6l3 11"/><path d="M5 10h14"/><path d="M8 10l1-5h6l1 5"/><path d="M7.5 15.5h9"/>',
+ parking:'<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>',
+ food:'<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10"/><path d="M17 21V3c-2 1-3 4-3 7s1 4 3 4"/>',
+ playground:'<path d="M4 21V5h7v16M4 9h7"/><path d="M11 9l9 12"/><circle cx="7.5" cy="13" r="1.5"/>',
+ picnic:'<path d="M3 9h18M5 9l-2 8M19 9l2 8M7 9l2 8M17 9l-2 8M3 13h18"/><path d="M8 5h8"/>',
+ fire:'<path d="M12 3c1 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 0-5 1-8z"/><path d="M5 21h14"/>',
+ pier:'<path d="M2 9h20M5 9v12M10 9v12M15 9v12M20 9v12"/><path d="M2 17c2-1 3-1 5 0s3 1 5 0 3-1 5 0 3 1 5 0"/>',
+ walk:'<circle cx="13" cy="4" r="2"/><path d="M11 21l2-6-3-3 1-5 4 3h3M10 12l-3 2v4"/>',
+ camp:'<path d="M3 20L12 4l9 16z"/><path d="M12 20l-3-6h6z"/>',
+ rental:'<path d="M6 21c0-8 3-14 6-18 3 4 6 10 6 18z"/><path d="M12 7v14"/>',
+ hike:'<path d="M3 20l6-10 4 6 3-4 5 8z"/><circle cx="17" cy="5" r="2"/>',
+ dog:'<path d="M5 11l-2-4 4 1 3 3h6l3-3 2 1-1 4v3l-2 1v4h-2v-3H9v3H7v-4l-2-2z"/>',
+ park:'<path d="M12 21v-6"/><path d="M7 15h10L12 3z"/><path d="M4 21h16"/>',
+ volley:'<circle cx="12" cy="12" r="9"/><path d="M12 3c-2 4-2 8 2 11M5 7c4 0 8 2 9 7M7 19c2-3 6-5 12-4"/>',
+ swim:'<circle cx="16" cy="6" r="2"/><path d="M5 12l5-3 3 3"/><path d="M2 16c2-1 3-1 5 0s3 1 5 0 3-1 5 0 3 1 5 0M2 20c2-1 3-1 5 0s3 1 5 0 3-1 5 0 3 1 5 0"/>',
+ surf:'<path d="M3 20c4-1 6-4 6-9 0-3 2-6 6-7 3 0 5 2 5 4-3-1-6 1-6 5 0 3-1 6-3 7"/><path d="M2 21h20"/>',
+ fish:'<path d="M3 12c3-4 8-5 12-3l4-3v12l-4-3c-4 2-9 1-12-3z"/><circle cx="8" cy="11" r=".8"/>',
+ kayak:'<path d="M2 15c5 2 15 2 20 0-5-2-15-2-20 0z"/><path d="M5 5l14 14M4 6l2-2M18 20l2-2"/>',
+ snorkel:'<path d="M3 10h12v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M18 4v11a4 4 0 0 1-4 4h-2"/>',
+ bike:'<circle cx="6" cy="16" r="4"/><circle cx="18" cy="16" r="4"/><path d="M6 16l4-8h5l3 8M10 8l3 8M9 5h3"/>',
+ tide:'<path d="M3 20h18"/><path d="M5 20c1-4 3-6 7-6s6 2 7 6"/><path d="M9 10l1-3M14 10l-1-3M11.5 9V5"/>',
+ sandcastle:'<path d="M4 21V12h3v-2h2v2h2V8h2v4h2v-2h2v2h3v9z"/><path d="M10 21v-4h4v4"/>',
+ bird:'<path d="M3 13c3 0 5-3 9-3 2 0 3 1 4 2l5-1-3 3c-1 3-4 5-8 5-4 0-6-3-7-6z"/><circle cx="15" cy="11" r=".8"/>',
+ sun:'<circle cx="12" cy="14" r="4"/><path d="M12 5v2M5 14H3M21 14h-2M6.5 8.5l1.4 1.4M17.5 8.5l-1.4 1.4M3 20h18"/>',
+ alcohol:'<path d="M10 3h4v4l2 3v11H8V10l2-3z"/>',
+ glass:'<path d="M7 3h10l-1 9a4 4 0 0 1-8 0z"/><path d="M12 16v5M9 21h6"/>',
+ smoke:'<rect x="2" y="13" width="16" height="4" rx="1"/><path d="M14 13v4M20 13v4M18 10c0-2 2-2 2-4M21 10c0-2 1-3 1-4"/>',
+ drone:'<rect x="9" y="10" width="6" height="4" rx="1"/><path d="M9 11L5 7M15 11l4-4M9 13l-4 4M15 13l4 4"/><path d="M2 7h6M16 7h6M2 17h6M16 17h6"/>',
+ fireworks:'<path d="M12 12v9M12 12l-5-5M12 12l5-5M12 12V3M12 12l-7 1M12 12l7 1"/>',
+ seal:'<path d="M3 17c2 2 6 3 10 1 3-1 4-4 4-7 0-2 1-3 3-3-1-2-3-3-5-2-2 1-2 3-2 5-1 3-5 3-8 4z"/><path d="M6 19l-2 2M10 20l1 2"/>',
+ train:'<rect x="6" y="3" width="12" height="13" rx="2"/><path d="M6 10h12M9 20l-2 2M15 20l2 2M9 16l-1 4h8l-1-4"/>',
+ water:'<path d="M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z"/>',
+ wave:'<path d="M2 17c3 0 4-3 6-6 2-4 6-5 9-3-2 0-4 2-3 5 1 2 4 3 8 3v3H2z"/>',
+ rip:'<path d="M2 20c2-1 3-1 5 0s3 1 5 0 3-1 5 0 3 1 5 0"/><path d="M12 16V4M8 8l4-4 4 4"/>',
+ rock:'<path d="M3 19l3-7 4-3 3 2 3-1 5 9z"/>',
+ cliff:'<path d="M3 21V5h6l2 4 1 3 2 2v7"/><path d="M15 17h2M17 20h3M18 14h1"/>',
+ stingray:'<path d="M12 6c4 0 9 3 10 6-4 0-6 2-10 2s-6-2-10-2c1-3 6-6 10-6z"/><path d="M12 14l1 7"/>',
+ stairs:'<path d="M3 20h4v-4h4v-4h4V8h4V4"/>',
+ bacteria:'<circle cx="12" cy="12" r="5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l3 3M15 15l3 3M6 18l3-3M15 9l3-3"/>',
+ crowd:'<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-4 3-6 6-6s6 2 6 6M12 20c0-3 2-6 4-6 3 0 6 2 6 6"/>',
+ alert:'<path d="M12 8v5M12 16v.5"/>',
+ none:'<circle cx="12" cy="12" r="8"/>'
+};
+const ICON_RULES=[[/\brip|current/i,"rip"],[/sea lion|seal|marine life/i,"seal"],[/train|rail/i,"train"],[/water quality|runoff/i,"water"],[/restroom/i,"restroom"],[/shower/i,"shower"],[/lifeguard/i,"lifeguard"],[/parking/i,"parking"],[/snack|food|belmont/i,"food"],[/playground/i,"playground"],[/picnic|grill/i,"picnic"],[/fire ring|bonfire/i,"fire"],[/pier|plaza/i,"pier"],[/boardwalk|seawall|strand|walking|jogging/i,"walk"],[/camp/i,"camp"],[/rental/i,"rental"],[/trail|hiking|hike/i,"hike"],[/dog/i,"dog"],[/park|lawn|garden/i,"park"],[/volleyball/i,"volley"],[/surf|bodyboard/i,"surf"],[/fish/i,"fish"],[/kayak|paddl/i,"kayak"],[/snorkel|scuba|div/i,"snorkel"],[/bik/i,"bike"],[/tide pool/i,"tide"],[/sandcastle/i,"sandcastle"],[/bird|horse/i,"bird"],[/sunset|watch/i,"sun"],[/swim/i,"swim"],[/alcohol/i,"alcohol"],[/glass/i,"glass"],[/smok/i,"smoke"],[/drone/i,"drone"],[/firework/i,"fireworks"],[/sea lion|seal|marine life/i,"seal"],[/train|rail/i,"train"],[/entering the water|sewage|contamina|closure/i,"water"],[/bacteria/i,"bacteria"],[/rip/i,"rip"],[/surf|wave|shorebreak|swell/i,"wave"],[/reef|rock|cobble/i,"rock"],[/bluff|cliff/i,"cliff"],[/stingray/i,"stingray"],[/stair|steep trail/i,"stairs"],[/crowd/i,"crowd"]];
+function iconFor(t){for(const[r,k]of ICON_RULES) if(r.test(t)) return k; return "alert";}
+function iconSvg(k){return `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]||IC.none}</svg>`;}
+
+// ---------- BEACH INFO: amenities, activities, rules, hazards (planning data; confirm posted signs) ----------
+const SD_CITY=["Pacific Beach","Mission Beach","Bonita Cove, Mission Bay","Ocean Beach","La Jolla Shores","La Jolla Cove","Windansea Beach","Black's Beach"];
+const INFO={
+ "Oceanside City Beach":{a:["Restrooms","Showers","Lifeguards","Pier","Parking (paid)","Food nearby"],x:["Swimming","Surfing","Pier fishing","Volleyball","Walking the Strand"],n:[],h:["Rip currents next to the pier and jetties"]},
+ "Buccaneer Beach":{a:["Restrooms","Lifeguards (summer)","Snack stand","Small park"],x:["Swimming","Bodyboarding","Picnics"],n:[],h:["Rocks at low tide"]},
+ "Carlsbad State Beach":{a:["Restrooms","Lifeguards","Seawall walkway","Street parking"],x:["Swimming","Surfing","Walking/jogging the seawall"],n:["Dogs on the sand"],h:["Cobblestones at the waterline in winter"]},
+ "Tamarack Beach":{a:["Restrooms","Lifeguards","Parking lot"],x:["Swimming","Surfing","Picnics"],n:["Dogs on the sand"],h:["Bluff erosion, so stay back from the cliffs"]},
+ "South Carlsbad State Beach":{a:["Restrooms","Showers","Campground","Lifeguards","Day-use parking (paid)"],x:["Camping","Surfing","Swimming","Fishing"],n:["Dogs on the sand"],h:["Unstable bluffs","Long staircases to the sand"]},
+ "Moonlight Beach":{a:["Restrooms","Showers","Lifeguards","Snack bar","Playground","Volleyball courts","Parking lot"],x:["Swimming","Bodyboarding","Volleyball","Picnics"],n:["Dogs on the sand"],h:["Busy shorebreak on big days"]},
+ "Swami's":{a:["Restrooms","Parking lot","Park on the bluff"],x:["Surfing (experienced)","Tide pooling at low tide"],n:["Dogs on the sand"],h:["Shallow reef","Strong currents","Long, steep staircase"]},
+ "Cardiff State Beach":{a:["Restrooms","Lifeguards","Parking lot (paid)"],x:["Surfing","Swimming","Tide pooling"],n:["Dogs on the sand"],h:["Reef and rocks","Lagoon runoff after rain"]},
+ "Fletcher Cove, Solana Beach":{a:["Restrooms","Showers","Lifeguards","Park and playground","Parking lot"],x:["Swimming","Surfing","Picnics"],n:["Dogs on the sand"],h:["Unstable bluffs, so don't sit under the cliffs"]},
+ "Del Mar City Beach":{a:["Restrooms","Showers","Lifeguards","Powerhouse Park","Dog beach (north end)"],x:["Swimming","Surfing","Dog beach at North Beach","Picnics"],n:["Walking on the railroad tracks"],h:["Trains run along the bluff","Unstable bluffs"]},
+ "Torrey Pines State Beach":{a:["Restrooms","Lifeguards","Parking lot (paid)","Hiking trails"],x:["Swimming","Surfing","Hiking the reserve","Tide pooling"],n:["Dogs in the reserve","Drones"],h:["Cliff collapses, so stay away from the bluff base","High tide can block the beach walk"]},
+ "Black's Beach":{a:["Lifeguards (seasonal)"],x:["Surfing (experienced)","Hiking down"],n:["Glass containers"],h:["Very steep trail","Powerful surf","Strong rip currents","Cliff collapses"]},
+ "La Jolla Shores":{a:["Restrooms","Showers","Lifeguards","Playground","Kayak and snorkel rentals","Parking lot"],x:["Swimming","Kayaking","Snorkeling","Scuba diving","Surfing (designated zones)"],n:["Fishing in the marine reserve"],h:["Stingrays in warm months: shuffle your feet","Deep canyon drop-off offshore"]},
+ "La Jolla Cove":{a:["Restrooms","Showers","Lifeguards","Scripps Park lawn"],x:["Snorkeling","Ocean swimming","Kayaking","Watching sea lions"],n:["Fishing or collecting (marine reserve)","Touching sea lions or seals"],h:["Slippery rocks","Sea lions can bite","Big waves can wash over the rocks"]},
+ "Windansea Beach":{a:["Street parking only"],x:["Surfing (experienced)","Sunset watching"],n:[],h:["Reef and rocks","Heavy shorebreak","No restrooms"]},
+ "Pacific Beach":{a:["Restrooms","Showers","Lifeguards","Boardwalk","Crystal Pier","Bike and surf rentals","Food nearby"],x:["Swimming","Surfing (designated zones)","Biking the boardwalk","Volleyball"],n:[],h:["Rip currents near the pier","Bike and scooter traffic on the boardwalk"]},
+ "Bonita Cove, Mission Bay":{a:["Restrooms","Playground","Picnic areas","Grassy park","Parking lot"],x:["Calm-water swimming","Paddleboarding","Kayaking","Picnics"],n:[],h:["Bay water quality drops after rain"]},
+ "Mission Beach":{a:["Restrooms","Showers","Lifeguards","Boardwalk","Belmont Park","Fire rings","Food nearby"],x:["Swimming","Surfing","Volleyball","Beach bonfires (in fire rings)","Biking the boardwalk"],n:[],h:["Rip currents","Crowded summer weekends"]},
+ "Ocean Beach":{a:["Restrooms","Showers","Lifeguards","OB Pier","Dog Beach (north end)","Fire rings","Food nearby"],x:["Swimming","Surfing","Pier fishing","Off-leash dogs at Dog Beach"],n:[],h:["Rip currents by the pier","Pier pilings in the surf"]},
+ "Coronado Central Beach":{a:["Restrooms","Showers","Lifeguards","Dog beach (north end)","Free street parking"],x:["Swimming","Bodyboarding","Volleyball","Sandcastles"],n:["Alcohol"],h:["Stingrays in warm months: shuffle your feet"]},
+ "Silver Strand State Beach":{a:["Restrooms","Showers","RV camping","Fire rings","Parking lot (paid)"],x:["Swimming","Camping","Beach bonfires","Bay-side paddling"],n:[],h:["Frequent sewage closures from Tijuana River runoff"]},
+ "Imperial Beach":{a:["Restrooms","Showers","Lifeguards","Pier","Pier Plaza"],x:["Surfing","Pier fishing","Sandcastles"],n:["Alcohol"],h:["Frequent sewage closures from Tijuana River runoff"]},
+ "Border Field State Park":{a:["Restrooms (limited)","Hiking trails","Friendship Park"],x:["Hiking","Horseback riding","Birdwatching"],n:["Entering the water during closures"],h:["Long-term sewage contamination","Park road often closed after rain"]}
+};
+function beachInfo(b){
+  const i=INFO[b.name]||{a:[],x:[],n:[],h:[]};
+  const no=["Glass containers","Smoking or vaping"];
+  if(SD_CITY.includes(b.name)) no.push("Alcohol");
+  if(!(i.a||[]).some(a=>/dog/i.test(a))&&!i.n.some(n=>/dog/i.test(n))) no.push("Dogs during posted hours");
+  i.n.forEach(n=>{if(!no.includes(n))no.push(n)});
+  const hz=[];
+  if(b.quality==="closed")hz.push("Sewage closure: stay out of the water");
+  else if(b.quality==="advisory")hz.push("Bacteria advisory");
+  if(b.rip==="high")hz.push("High rip currents today");
+  else if(b.rip==="moderate")hz.push("Moderate rip currents today");
+  if(b.surf>=5)hz.push(`Large waves today (${b.surf} ft)`);
+  if(!b.lifeguard)hz.push("No lifeguard tower");
+  i.h.forEach(h=>hz.push(h));
+  if(!no.includes("Fireworks")) no.push("Fireworks");
+  const item=(cls,t,k)=>`<li class="ic ${cls}"><span class="ib">${iconSvg(k||iconFor(t))}</span><span>${t}</span></li>`;
+  const group=(title,cls,arr,empty)=>`<div class="ig"><h3>${title}</h3>${arr.length?`<ul class="igrid">${arr.map(t=>item(cls,t)).join("")}</ul>`:`<p class="note">${empty}</p>`}</div>`;
+  return `<section class="box wide info">
+      ${group("Amenities","am",i.a,"Few or no facilities here.")}
+      ${group("Activities","ok",i.x,"")}
+      ${group("Prohibitions","no",no.map(n=>"No "+n.charAt(0).toLowerCase()+n.slice(1)),"")}
+      ${group("Hazards","hz",hz,"")}
+      <p class="note">Rules vary by city and season. Always follow posted signs and lifeguard instructions.</p></section>`;
+}
+// ---------- NEARBY FOOD (live from OpenStreetMap via the free Overpass API) ----------
+const FOOD_CACHE={};
+async function loadFood(b){
+  const box=$("food"); if(!box) return;
+  const show=list=>{
+    if(!$("food")||$("food").dataset.n!==b.name) return;
+    if(!list){$("food").innerHTML=`<p class="note">Couldn't load restaurants right now. <a href="https://www.google.com/maps/search/restaurants/@${b.lat},${b.lng},16z" target="_blank" rel="noopener">Search Google Maps</a> instead.</p>`;return;}
+    if(!list.length){$("food").innerHTML=`<p class="note">No restaurants listed within half a mile. <a href="https://www.google.com/maps/search/restaurants/@${b.lat},${b.lng},15z" target="_blank" rel="noopener">Search a wider area</a>.</p>`;return;}
+    $("food").innerHTML=`<ul class="food">${list.map(r=>`<li><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}%20${r.lat},${r.lng}" target="_blank" rel="noopener"><span><b>${r.name}</b><small>${r.kind}${r.cuisine?" · "+r.cuisine:""}</small></span><em>${r.d<0.1?Math.round(r.d*5280)+" ft":r.d.toFixed(1)+" mi"}</em></a></li>`).join("")}</ul>
+      <p class="note">From OpenStreetMap. Tap one to see hours and reviews.</p>`;
+  };
+  if(FOOD_CACHE[b.name]) return show(FOOD_CACHE[b.name]);
+  const q=`[out:json][timeout:15];(node["amenity"~"^(restaurant|cafe|fast_food|ice_cream)$"]["name"](around:800,${b.lat},${b.lng}););out body 60;`;
+  try{
+    const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+    if(!r.ok) throw 0; const j=await r.json();
+    const kinds={restaurant:"Restaurant",cafe:"Café",fast_food:"Quick bite",ice_cream:"Ice cream"};
+    const list=j.elements.map(e=>({name:e.tags.name,kind:kinds[e.tags.amenity]||"Food",cuisine:(e.tags.cuisine||"").split(";")[0].replace(/_/g," "),lat:e.lat,lng:e.lon,d:miles(b.lat,b.lng,e.lat,e.lon)}))
+      .sort((a,c)=>a.d-c.d).slice(0,8);
+    FOOD_CACHE[b.name]=list; show(list);
+  }catch(e){ show(null); }
+}
+
+// Safe Beach Day pages (by Watchtower; info "directly from the lifeguards"). No public data feed, so we link out.
+// Add more beach URLs here as you confirm them on safebeachday.com; unlisted beaches open the home page.
+const SBD={"Carlsbad State Beach":"https://safebeachday.com/carlsbad-state-beach/"};
+const barColor=v=>v>=70?"var(--good)":v>=40?"var(--sun)":"var(--bad)";
+function scoreExtras(b){
+  // best hour today for this beach
+  let best=null;
+  for(let h=8;h<=18;h++){const x={...b};const sc=score(x,when(h)).total;if(!best||sc>best.sc)best={h,sc};}
+  const nowSc=b.s.total, sel=+$("hour").value;
+  const tip=best.h===sel||best.sc<=nowSc?`You picked a good time. ${fmtH(sel)} is already about as good as this beach gets today.`
+    :`Go at <b>${fmtH(best.h)}</b> instead and the score rises to <b>${best.sc}</b> (fewer people).`;
+  // compare with nearby beaches
+  const pool=lastRows.length?lastRows:[];
+  let cmp=pool.slice(0,5);
+  if(!cmp.some(x=>x.name===b.name)) cmp=[...cmp.slice(0,4),b];
+  cmp=cmp.slice().sort((x,y)=>y.s.total-x.s.total);
+  return `<div class="extra"><h4>Best time to go</h4><p class="besttime">${tip}</p></div>
+    <div class="extra"><h4>Compared with nearby beaches</h4><div class="cmp">${cmp.map(x=>`<a href="#${slug(x.name)}" class="${x.name===b.name?"me":""}"><span>${x.name}</span><i style="--v:${x.s.total};--bc:${scoreColor(x)}"></i><em>${x.s.total}</em></a>`).join("")}</div></div>`;
+}
+// ---------- BEACH DETAIL PAGE ----------
+const slug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+let lastRows=[], bpMap=null, bpLayer=null;
+function verdictOf(b,top){return b.quality==="closed"?["Closed today","var(--bad)","var(--surface)"]:top?["Top pick","var(--good)","var(--good-bg)"]:b.s.total>=70?["Great pick","var(--good)","var(--good-bg)"]:b.s.total>=45?["Pretty good","var(--accent)","var(--accent-soft)"]:["Just okay","var(--warn)","var(--warn-bg)"];}
+const scoreColor=b=>b.quality==="closed"?"var(--bad)":b.s.total>=70?"var(--good)":b.s.total>=45?"var(--accent)":"var(--sun)";
+function waterFeel(t){return t<62?"Chilly. A wetsuit helps.":t<66?"Refreshing. Fine for a quick dip.":t<70?"Comfortable for swimming.":"Warm and inviting.";}
+function renderBeach(name){
+  const o=origin(), R=+$("radius").value, w=when();
+  const b={...BEACHES.find(x=>x.name===name)}; b.d=miles(o.lat,o.lng,b.lat,b.lng); b.s=score(b,w);
+  const rank=lastRows.findIndex(x=>x.name===name), top=rank===0&&b.quality!=="closed", v=verdictOf(b,top);
+  const dayTxt=$("day").selectedOptions[0].text, hourTxt=fmtH(+$("hour").value);
+  const driveMin=Math.max(5,Math.round(b.d*1.3/28*60));
+  // week at this hour
+  const week=[];for(let i=0;i<7;i++){const d=new Date(NOW);d.setDate(d.getDate()+i);d.setHours(+$("hour").value,0,0,0);week.push([d,crowdAt(b,d).ratio]);}
+  const quietDay=[...week].sort((a,c)=>a[1]-c[1])[0];
+  const hrs=[];for(let h=10;h<=16;h++)hrs.push([h,crowdAt(b,when(h)).ratio]);
+  const quietHr=hrs.sort((a,c)=>a[1]-c[1])[0];
+  const tips=[];
+  if(b.quality==="closed")tips.push("Stay out of the water today. Pick one of the nearby beaches below instead.");
+  if(b.quality==="advisory")tips.push("Avoid swallowing water and skip swimming near creek or storm-drain outlets.");
+  if(b.rip!=="low")tips.push("Rip currents are likely. Swim near a lifeguard tower, and if you get pulled out, swim parallel to shore.");
+  if(!b.lifeguard)tips.push("There's no lifeguard tower here, so swim with a buddy.");
+  if(b.waterF<64)tips.push(`The water is ${b.waterF}°F, so bring a wetsuit or plan short swims.`);
+  tips.push(`Quietest time ${dayTxt.toLowerCase()==="today"?"today":"that day"}: ${fmtH(quietHr[0])} (${pct(quietHr[1])}% busy).`);
+  if(quietDay[0].getDay()!==w.getDay())tips.push(`At ${hourTxt}, ${quietDay[0].toLocaleDateString("en-US",{weekday:"long"})} is the quietest day this week.`);
+  if(b.event)tips.push(`${b.event} today, so expect extra people and harder parking.`);
+  const alts=lastRows.filter(x=>x.name!==name&&x.quality!=="closed").slice(0,3);
+  const bus=b.buses.map(([r,p])=>{const[t,k]=fullTxt(p);const c=k==="g"?"var(--good)":k==="w"?"var(--sun)":"var(--bad)";
+    return `<div class="busrow"><span>${r}</span><i style="--v:${p};--bc:${c}"></i><span class="chip ${k}">${t} · ${p}%</span></div>`}).join("");
+  const crowdTone=b.ratio<.25?"var(--good)":b.ratio<.5?"var(--sea)":b.ratio<.75?"var(--sun)":"var(--coral)";
+  $("beachpage").innerHTML=`
+    <button class="back" id="back" type="button">← All beaches</button>
+    <header class="bp-head ${b.quality==="closed"?"closed":top?"top":""} ${PHOTOS[b.name]?"photo":""}" ${PHOTOS[b.name]?`style="--img:url('${PHOTOS[b.name].url}')"`:""}>
+      <div>
+        <span class="verdict" style="--vc:${v[1]};--vb:${v[2]}">${v[0]}</span>
+        <h2>${b.name}</h2>
+        <div class="bp-sub"><span><b>${b.d.toFixed(1)} mi</b> from your pin</span>${rank>=0?`<span>Ranked <b>#${rank+1}</b> of ${lastRows.length} nearby</span>`:`<span>Outside your ${R} mi radius</span>`}<span>${dayTxt} around <b>${hourTxt}</b></span>${b.event?`<span>${b.event}</span>`:""}</div>
+        ${PHOTOS[b.name]?`<div class="credit">Photo from Wikimedia Commons via Wikipedia (${PHOTOS[b.name].credit})</div>`:""}
+      </div>
+      <div class="bigdial" style="--p:${b.s.total};--c:${scoreColor(b)}"><span>${b.s.total}<small>out of 100</small></span></div>
+    </header>
+    ${b.quality==="closed"?`<div class="banner b">Closed for contaminated water<span>The County has closed this beach because sewage runoff has made the water unsafe. Don't swim, surf or let pets in the water.</span></div>`:b.quality==="advisory"?`<div class="banner w">Water quality advisory<span>Bacteria levels are above state standards in recent samples. Swimming isn't recommended, especially near outlets. Score is cut in half.</span></div>`:""}
+    <section class="live">
+      <div><b>Check today's official conditions</b><span>Lifeguard wave strength, stingray activity and hazards from Safe Beach Day, plus the County's water quality status.</span></div>
+      <div class="btns"><a href="${SBD[b.name]||"https://safebeachday.com/"}" target="_blank" rel="noopener">Lifeguard report on Safe Beach Day</a><a class="alt" href="https://www.sdbeachinfo.com/" target="_blank" rel="noopener">County water quality</a></div>
+    </section>
+    <section class="tiles" aria-label="Conditions">
+      <div class="tile" style="--tc:${b.quality==="good"?"var(--good)":b.quality==="advisory"?"var(--sun)":"var(--bad)"}"><h3>Water quality</h3><div class="big">${b.quality==="good"?"Clean":b.quality==="advisory"?"Advisory":"Closed"}</div><p>${b.quality==="good"?"Meets state bacteria standards.":b.quality==="advisory"?"Above state bacteria standards.":"Sewage contamination."}</p></div>
+      <div class="tile" style="--tc:${b.rip==="low"?"var(--good)":b.rip==="moderate"?"var(--sun)":"var(--bad)"}"><h3>Swim safety</h3><div class="big">Rip risk ${b.rip}</div><p>${b.surf?b.surf+" ft waves":"Calm bay water"} · ${b.lifeguard?"Lifeguards on duty":"No lifeguard"}</p></div>
+      <div class="tile"><h3>Tide ${b.tideLive?'<span class="lv">Live</span>':""}</h3><div class="big">${b.tide.split(",")[0]}</div><p>${b.tide.split(",").slice(1).join(",").trim()}${b.tideLive?` · NOAA ${TIDE_STATIONS[tideStation(b)]}`:""}</p></div>
+      <div class="tile" style="--tc:${b.waterF>=66?"var(--good)":b.waterF>=62?"var(--sea)":"var(--accent)"}"><h3>Water temperature ${b.waterLive?'<span class="lv">Live</span>':""}</h3><div class="big">${b.waterF}°F</div><p>${waterFeel(b.waterF)}${b.waterLive?` Measured at ${b.waterLive}.`:""}</p></div>
+      <div class="tile" style="--tc:var(--sun)"><h3>Weather ${b.wxLive?'<span class="lv">Live</span>':""}</h3><div class="big">${SKY_LABEL[b.sky]||b.sky}, ${b.airF}°F</div><p>${b.wxLive?`NWS forecast for ${hourTxt}${b.wind!=null?` · wind ${b.wind} mph`:""}${b.pop?` · ${b.pop}% rain`:""}.`:"Air temperature on the sand."}</p></div>
+      <div class="tile" style="--tc:${crowdTone}"><h3>How busy</h3><div class="big">${pct(b.ratio)}% busy</div><p>${b.crowd} for this beach at ${hourTxt}.</p></div>
+    </section>
+    <div class="bp-grid">
+      <section class="box"><h3>Getting there</h3><div id="bpmap" aria-label="Map showing the beach and your pin"></div>
+        <p class="note">About ${driveMin} min by car · ${b.d.toFixed(1)} mi</p>
+        ${bus||'<p class="note">No direct bus route serves this beach.</p>'}
+        <div class="btns"><a href="https://www.google.com/maps/dir/?api=1&origin=${pin.lat},${pin.lng}&destination=${b.lat},${b.lng}&travelmode=transit" target="_blank" rel="noopener">Transit directions</a><a class="alt" href="https://www.google.com/maps/dir/?api=1&origin=${pin.lat},${pin.lng}&destination=${b.lat},${b.lng}&travelmode=driving" target="_blank" rel="noopener">Driving directions</a></div>
+      </section>
+      <section class="box"><h3>Why it scored ${b.s.total}</h3><div class="bars">
+          ${[["safety","Swim safety"],["comfort","Water comfort"],["crowds","Crowds"],["weather","Weather"],["drive","Drive time"]].map(([k,l])=>{const v=Math.round(b.s.x[k]*100);return `<div class="bar"><span>${l} <small>${Math.round(b.s.w[k]*100)}%</small></span><i style="--v:${v};--bc:${barColor(v)}"></i><em>${v}</em></div>`}).join("")}
+          <div class="bar gate">Water quality<i style="--v:${Math.round(b.s.G*100)};--bc:${barColor(b.s.G*100)}"></i><em>×${b.s.G.toFixed(2)}</em></div>
+        </div><div class="legend"><span style="--lc:var(--good)">High</span><span style="--lc:var(--sun)">Medium</span><span style="--lc:var(--bad)">Low</span></div><p class="note">Score = 100 × water quality (${b.s.G.toFixed(2)}) × conditions (${b.s.Q.toFixed(2)}). Water quality multiplies everything, so bad water can never be outweighed. ${b.s.daylight<1?"<b>After dark there are no lifeguards, so safety drops sharply.</b> ":""}${b.s.gate.tij<1?`Tijuana River sewage factor here: ×${b.s.gate.tij.toFixed(2)}.`:""}</p>
+        ${scoreExtras(b)}</section>
+      ${beachInfo(b)}
+      <section class="box"><h3>How busy it gets ${dayTxt.toLowerCase()==="today"?"today":"on "+dayTxt}</h3><div class="detail"><div class="hourly">${hourly(b)}</div></div></section>
+      ${trolleyPlan(b)}
+      <section class="box"><h3>This week at ${hourTxt}</h3><div class="week">${week.map(([d,r],i)=>`<div class="${i===+$("day").value?"on":""}" title="${pct(r)}% busy"><em>${pct(r)}%</em><i style="height:${Math.max(5,pct(r))}%"></i>${i===0?"Today":d.toLocaleDateString("en-US",{weekday:"short"})}</div>`).join("")}</div></section>
+      <section class="box"><h3>Good to know</h3><ul class="tips">${tips.map(t=>`<li>${t}</li>`).join("")}</ul></section>
+      <section class="box"><h3>Places to eat nearby</h3><div id="food" data-n="${b.name}"><p class="note">Finding restaurants near the beach…</p></div></section>
+      ${alts.length?`<section class="box"><h3>Other good beaches nearby</h3><div class="alts">${alts.map(a=>`<a href="#${slug(a.name)}"><span>${a.name}<br><small class="dist">${a.d.toFixed(1)} mi away</small></span><b>${a.s.total}</b></a>`).join("")}</div></section>`:""}
+    </div>`;
+  $("back").addEventListener("click",()=>{location.hash="";});
+  loadFood(b);
+  // mini map
+  if(bpMap){bpMap.remove();bpMap=null;}
+  bpMap=L.map("bpmap",{scrollWheelZoom:false});
+  makeTiles().addTo(bpMap);
+  L.circleMarker([b.lat,b.lng],{radius:11,color:"#fff",weight:3,fillColor:scoreColor(b).includes("bad")?COLORS.bad:COLORS.ok,fillOpacity:1}).bindTooltip(b.name,{permanent:true,direction:"top",offset:[0,-10]}).addTo(bpMap);
+  L.marker(pin,{icon:pinIcon}).bindTooltip("You",{direction:"top",offset:[0,-10]}).addTo(bpMap);
+  bpMap.fitBounds(L.latLngBounds([[b.lat,b.lng],[pin.lat,pin.lng]]),{padding:[40,40],maxZoom:14});
+}
+function route(){
+  const h=decodeURIComponent(location.hash.slice(1));
+  const b=h&&BEACHES.find(x=>slug(x.name)===h);
+  if(b){$("home").hidden=true;$("beachpage").hidden=false;renderBeach(b.name);window.scrollTo(0,0);}
+  else{$("beachpage").hidden=true;$("home").hidden=false;if(bpMap){bpMap.remove();bpMap=null;}setTimeout(()=>lmap.invalidateSize(),0);}
+}
+window.addEventListener("hashchange",route);
+// ---------- BEACH PHOTOS (free-licensed lead images from Wikipedia / Wikimedia Commons) ----------
+const WIKI={"Oceanside City Beach":"Oceanside_Pier","Buccaneer Beach":"Oceanside,_California","Carlsbad State Beach":"Carlsbad_State_Beach",
+ "Tamarack Beach":"Carlsbad,_California","South Carlsbad State Beach":"South_Carlsbad_State_Beach","Moonlight Beach":"Moonlight_State_Beach",
+ "Swami's":"Swami's","Cardiff State Beach":"Cardiff_State_Beach","Fletcher Cove, Solana Beach":"Solana_Beach,_California",
+ "Del Mar City Beach":"Del_Mar,_California","Torrey Pines State Beach":"Torrey_Pines_State_Natural_Reserve","Black's Beach":"Black's_Beach",
+ "La Jolla Shores":"La_Jolla_Shores","La Jolla Cove":"La_Jolla_Cove","Windansea Beach":"Windansea_Beach","Pacific Beach":"Pacific_Beach,_San_Diego",
+ "Bonita Cove, Mission Bay":"Mission_Bay_(San_Diego)","Mission Beach":"Mission_Beach,_San_Diego","Ocean Beach":"Ocean_Beach,_San_Diego",
+ "Coronado Central Beach":"Coronado,_California","Silver Strand State Beach":"Silver_Strand_State_Beach","Imperial Beach":"Imperial_Beach,_California",
+ "Border Field State Park":"Border_Field_State_Park"};
+let PHOTOS={};
+try{PHOTOS=JSON.parse(localStorage.getItem("sdbf-photos-v1"))||{};}catch(e){}
+const BAD=/map|seal|flag|logo|locator|location|coat_of_arms|\.svg/i;
+async function loadPhotos(){
+  const missing=BEACHES.filter(b=>!PHOTOS[b.name]&&WIKI[b.name]);
+  if(!missing.length) return;
+  await Promise.all(missing.map(async b=>{
+    try{
+      const r=await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(WIKI[b.name]));
+      if(!r.ok) return; const j=await r.json(); const t=j.thumbnail&&j.thumbnail.source;
+      if(!t||BAD.test(t)) return;
+      const file=decodeURIComponent((t.split("/").pop()||"").replace(/^\d+px-/,"")).replace(/_/g," ");
+      const o=j.originalimage;
+      PHOTOS[b.name]={url:(o&&o.width>960)?t.replace(/\/\d+px-/,"/960px-"):(o?o.source:t),credit:file};
+    }catch(e){}
+  }));
+  try{localStorage.setItem("sdbf-photos-v1",JSON.stringify(PHOTOS))}catch(e){}
+  render();
+}
+render();
+route();
+loadPhotos();
+loadLive();
+</script>
+
+</body>
+</html>
