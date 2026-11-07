@@ -342,16 +342,16 @@ input[type=range]:focus-visible{outline:3px solid var(--accent);outline-offset:4
 //  https://www.sdbeachinfo.com
 //  Use one of: "good" (open / clean), "advisory", "closed", "untested"
 // =====================================================================
-const WATER_QUALITY_CHECKED = "Nov 7, 2026";
+const WATER_QUALITY_CHECKED = "Nov 7, 2026";   // based on County notices of Sep 28 and Nov 1, 2026
 const WATER_QUALITY = {
   "Oceanside City Beach"        : "good",
   "Buccaneer Beach"             : "good",
   "Carlsbad State Beach"        : "good",
-  "Tamarack Beach"              : "advisory",
+  "Tamarack Beach"              : "good",
   "South Carlsbad State Beach"  : "good",
   "Moonlight Beach"             : "good",
   "Swami's"                     : "good",
-  "Cardiff State Beach"         : "advisory",
+  "Cardiff State Beach"         : "good",
   "Fletcher Cove, Solana Beach" : "good",
   "Del Mar City Beach"          : "good",
   "Torrey Pines State Beach"    : "good",
@@ -362,13 +362,14 @@ const WATER_QUALITY = {
   "Pacific Beach"               : "good",
   "Bonita Cove, Mission Bay"    : "good",
   "Mission Beach"               : "good",
-  "Ocean Beach"                 : "advisory",
+  "Ocean Beach"                 : "good",
   "Coronado Central Beach"      : "advisory",
-  "Silver Strand State Beach"   : "closed",
+  "Silver Strand State Beach"   : "good",
   "Imperial Beach"              : "closed",
   "Border Field State Park"     : "closed",
 };
 // Rain in the last 72 hours (inches) and hours since it stopped. 0 if no rain.
+// Last rain: Oct 31, 2026 (0.25-0.5 in on the coast), more than 72 hours ago, so no runoff penalty.
 const RAIN = { in72h: 0, hoursSince: 72 };
 // =====================================================================
 // ---------- DATA LAYER (replace these with real API calls later) ----------
