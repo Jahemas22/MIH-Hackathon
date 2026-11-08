@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tideline</title>
+<title>SDBeachFinder</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
@@ -284,7 +284,7 @@ input[type=range]:focus-visible{outline:3px solid var(--accent);outline-offset:4
 <header class="hero">
   <div class="hero-in">
     <div class="sun" aria-hidden="true"></div>
-    <span class="eyebrow">Tideline · San Diego beach finder</span>
+    <span class="eyebrow">SDBeachFinder</span>
     <h1>Find your perfect <em>San Diego Beach</em></h1>
     <p class="sub">Drop a pin, pick a time, and we'll rank the beaches near you by clean water, safe swimming, warm water and how crowded it'll be.</p>
   </div>
@@ -476,7 +476,7 @@ async function loadWeather(){
   LIVE.status.weather=Object.keys(LIVE.wx).length?"live":"demo";
 }
 function ymd(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");}
-const NOAA="https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?application=Tideline&units=english&time_zone=lst_ldt&format=json";
+const NOAA="https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?application=SDBeachFinder&units=english&time_zone=lst_ldt&format=json";
 async function loadTides(){
   const start=new Date(NOW);start.setDate(start.getDate()-1);
   await pool(Object.keys(TIDE_STATIONS),2,async st=>{
@@ -516,7 +516,7 @@ async function loadLive(){
   await Promise.all(tasks.map(async([k,fn])=>{try{await fn();}catch(e){LIVE.status[k]="demo";}liveBadge();render();}));
 }
 
-// ---------- TIDELINE SCORE: Score = 100 x G (water quality) x Q (conditions) ----------
+// ---------- SDBEACHFINDER SCORE: Score = 100 x G (water quality) x Q (conditions) ----------
 // Demo inputs for things we don't have live feeds for yet.
 const TIJUANA={L:0.7,S:0.4};                    // river pollution level 0-1, share of swell from S-SW 0-1
 const EXPOSURE={"Coronado Central Beach":1,"Silver Strand State Beach":1,"Imperial Beach":2,"Border Field State Park":2};
